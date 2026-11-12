@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The logQ Boutique · Sampled Softmax, Contrastive Learning & ScaNN, Gently</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root { --bg:#fdf4f0; --panel:#ffffff; --edge:#e8d4ce; --ink:#2a1d23; --dim:#786670;
+    --rose:#b76e79; --gold:#c89b4e; --plum:#6d28d9; --teal:#0d9488; --rose2:#e85d9e;
+    --mono:"Cascadia Code","Consolas",monospace; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{color:var(--ink);font-family:Georgia,serif;overflow:hidden;background:var(--bg);
+       background-image:radial-gradient(#e5c3bc80 1px,transparent 1.3px);background-size:3.6vmin 3.6vmin;}
+  .slide{display:none;width:100vw;height:100vh;padding:5vh 7vw 8rem;flex-direction:column;
+         justify-content:center;justify-content:safe center;position:relative;overflow-y:auto;}
+  .slide.active{display:flex;animation:rise .5s ease;}
+  @keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+  .slide::-webkit-scrollbar{width:11px;}
+  .slide::-webkit-scrollbar-track{background:#0000000a;border-radius:6px;}
+  .slide::-webkit-scrollbar-thumb{background:#b76e794d;border-radius:6px;border:2px solid transparent;background-clip:content-box;}
+  .kicker{color:var(--rose);font-size:.95rem;letter-spacing:.3em;text-transform:uppercase;margin-bottom:.9rem;font-weight:700;font-family:"Segoe UI",sans-serif;}
+  h1{font-size:2.6rem;line-height:1.22;max-width:34ch;font-weight:700;}
+  h2{font-size:1.75rem;line-height:1.3;margin-bottom:.9rem;max-width:46ch;font-weight:700;}
+  .sub{color:var(--dim);font-size:1.06rem;margin-top:.8rem;max-width:72ch;line-height:1.6;font-family:"Segoe UI",sans-serif;}
+  .rose{color:var(--rose);font-weight:700;} .gold{color:var(--gold);font-weight:700;}
+  .plum{color:var(--plum);font-weight:700;} .teal{color:var(--teal);font-weight:700;}
+  .beat{display:none;margin:.5rem 0;max-width:80ch;font-family:"Segoe UI",sans-serif;}
+  .beat.on{display:block;animation:rise .45s ease;}
+  .beat.coach{background:#fff2ec;border:1px solid #f0d4c9;border-left:4px solid var(--rose);border-radius:0 12px 12px 12px;
+              padding:.7rem 1.1rem;font-size:1.03rem;line-height:1.6;}
+  .beat.coach::before{content:"🪡 coach · ";color:var(--rose);font-weight:700;font-size:.82rem;letter-spacing:.08em;}
+  .beat.reveal{background:#fdf0e3;border:1.5px solid var(--gold);border-radius:12px;padding:.7rem 1.1rem;font-size:1.02rem;line-height:1.6;}
+  .beat.reveal b{color:var(--rose);}
+  .beatHint{position:fixed;bottom:2.9rem;left:50%;transform:translateX(-50%);color:#9a7e86;font-size:.84rem;
+            font-family:"Segoe UI",sans-serif;background:#fdf4f0cc;padding:.2rem .9rem;border-radius:999px;
+            border:1px solid #e8d4ce;backdrop-filter:blur(3px);z-index:40;}
+  .eq{font-family:var(--mono);background:#fff;border:1px solid var(--edge);border-radius:8px;padding:.6rem 1rem;
+      display:inline-block;margin:.3rem 0;font-size:.95rem;line-height:1.5;color:#2a1d23;}
+  .eq .n{color:var(--teal);} .eq .d{color:var(--plum);} .eq .hl{background:#fde3dc;padding:0 3px;border-radius:3px;}
+  table{border-collapse:collapse;font-size:.95rem;width:auto;font-family:"Segoe UI",sans-serif;margin:.4rem 0;}
+  th{text-align:left;color:var(--dim);font-weight:600;padding:.4rem .8rem .4rem 0;border-bottom:2px solid var(--edge);}
+  td{padding:.45rem .8rem .45rem 0;border-bottom:1px solid #f0e5e0;}
+  td.num{font-family:var(--mono);color:var(--rose);white-space:nowrap;}
+  .plot{background:#fff;border-radius:12px;border:1px solid var(--edge);padding:.4rem;box-shadow:2px 3px 0 #0001;
+        margin-top:.6rem;}
+  .ctl{display:flex;gap:.6rem;align-items:center;margin-top:.5rem;font-family:"Segoe UI",sans-serif;font-size:.86rem;color:var(--dim);}
+  .btn{font-family:"Segoe UI",sans-serif;font-size:.88rem;color:var(--dim);background:#fff;border:1px solid var(--edge);
+       border-radius:4px;padding:.35rem .9rem;cursor:pointer;}
+  .btn:hover{border-color:var(--rose);color:var(--rose);}
+  .step{font-family:var(--mono);color:var(--rose);font-weight:700;}
+  .cols{display:flex;gap:1.4rem;align-items:flex-start;flex-wrap:wrap;}
+  .col{flex:1;min-width:300px;}
+  .card{background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:1rem 1.2rem;box-shadow:2px 3px 0 #0001;}
+  .card h3{font-size:1.02rem;margin-bottom:.4rem;color:var(--rose);}
+  .card p{color:var(--dim);font-size:.93rem;line-height:1.55;font-family:"Segoe UI",sans-serif;}
+  .notes{position:fixed;bottom:0;left:0;right:0;background:#2a1d23f5;border-top:2px solid var(--rose);padding:1rem 7vw;
+         font-size:1rem;color:#f0e0dc;line-height:1.5;display:none;max-height:38vh;overflow:auto;font-family:"Segoe UI",sans-serif;}
+  body.show-notes .notes.active-note{display:block;}
+  .hud{position:fixed;top:1rem;right:1.4rem;color:#c9a69c;font-family:var(--mono);font-size:.85rem;}
+  .hint{position:fixed;bottom:1rem;left:1.4rem;color:#c9a69c;font-size:.85rem;font-family:"Segoe UI",sans-serif;
+        background:#fdf4f0cc;padding:.2rem .7rem;border-radius:999px;z-index:40;}
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">The logQ Boutique · Sampled Softmax, Explained Slowly</div>
+  <h1>Alice has clicked three <span class="rose">dresses</span>.<br>The catalog has <span class="gold">a billion</span>. Now what?</h1>
+  <p class="sub">We'll unfold <b>sampled softmax</b>, <b>in-batch negatives</b>, the mysterious <b>logQ correction</b>, and <b>contrastive learning</b> — line by line, with a toy fashion store and a 3D embedding animation you can spin. The RecSys deck named these things; today we'll <em>mean</em> them. As a bonus: why <b>ScaNN</b> beats using PCA alone.</p>
+</section>
+<div class="notes">Audience note: she knows two-tower models exist; what's missing is the derivation of logQ (importance sampling in disguise) and the pull-push mental model of contrastive learning. Build the intuition before the equations.</div>
+
+<!-- 2 SETUP -->
+<section class="slide">
+  <div class="kicker">The Scene · A Boutique at 10⁹</div>
+  <h2>Alice's user vector <span class="gold">u</span>. Every dress is a vector <span class="rose">v</span>. Relevance = their dot product <span class="eq">u · v</span>.</h2>
+  <div class="beat coach" data-say="Our two towers have already learned what a user vector means, and what a dress vector means. Both live in the same 64-dimensional space. All of recommendation is now one question: for Alice's vector, which dress vectors have the largest dot product?">
+    Both towers map into the same space (say, 64-d). Recommendation becomes one question: <b>for Alice's vector u, which dress vectors v have the biggest dot product u·v?</b></div>
+  <div class="beat reveal" data-say="Alice's positives — dresses she actually clicked — should have high dot product with her vector. Everything else should have lower. That is the whole training signal. The only drama is how to express 'everything else' when everything else is a billion items.">
+    <span class="rose">Alice's positives</span> (dresses she clicked) → want <span class="eq">u · v⁺</span> to be <b>high</b>.<br>
+    <span class="teal">Everything else</span> → want their dot products <b>lower</b>.<br>
+    That's the signal. The only drama: how do you say "everything else" when "everything else" has <b>10⁹</b> items?</div>
+</section>
+<div class="notes">Fashion example chosen because clusters are intuitive — boho, cocktail, athletic, work. Users click within clusters: Alice likes boho, Bob likes athletic. The model must learn those clusters from clicks alone.</div>
+
+<!-- 3 FULL SOFTMAX -->
+<section class="slide">
+  <div class="kicker">Step 1 · The Honest (Impossible) Loss</div>
+  <h2>Full softmax: treat picking the right dress as a 10⁹-way classification.</h2>
+  <div class="beat coach" data-say="Here is the loss we would compute if compute were free. Over all one billion dresses, make the clicked dress's score the highest. Written out, line by line.">
+    If compute were free, we'd minimize this for each click of Alice's:</div>
+  <div class="beat reveal">
+    <div class="eq" style="font-size:1.05rem">
+    L &nbsp;=&nbsp; <span style="color:var(--dim)">−log</span> &nbsp;
+    <span style="display:inline-block;vertical-align:middle">
+      <span class="n" style="border-bottom:1.5px solid #333;padding-bottom:3px;display:block">exp(u · v⁺)</span>
+      <span class="d" style="display:block;padding-top:3px">Σ<sub>k ∈ V</sub> exp(u · v<sub>k</sub>)</span></span></div>
+    <table style="margin-top:.8rem">
+      <tr><td class="num">u · v⁺</td><td>dot product of Alice with her <span class="rose">positive</span> dress — <b>want this big</b></td></tr>
+      <tr><td class="num">exp(…)</td><td>turn a score into a positive number (softmax ingredient)</td></tr>
+      <tr><td class="num" style="color:var(--plum)">V</td><td>the <b>vocabulary</b> — EVERY dress in the catalog (all 10⁹)</td></tr>
+      <tr><td class="num" style="color:var(--plum)">Σ … exp(u·v<sub>k</sub>)</td><td>the <b>normalizer</b> (also called "the partition function Z") — sums over the whole catalog</td></tr>
+      <tr><td class="num">−log</td><td>turns probability into loss: higher probability of the positive ⇒ lower loss</td></tr>
+    </table></div>
+  <div class="beat reveal" data-say="This loss is beautifully correct. It is also, at a billion items per gradient step, physically impossible on any hardware you will ever touch. The question becomes: can we fake this sum well?">
+    <b class="rose">Beautifully correct. Also physically impossible.</b> 10⁹ dot products × every click × every step. We need a way to <em>fake</em> that denominator well.</div>
+</section>
+<div class="notes">Have her stare at the denominator. The ENTIRE difficulty of training retrieval models is "the normalizer is impossible." Everything that follows (sampled softmax, NCE, InfoNCE, in-batch, logQ) is a different way to approximate it.</div>
+
+<!-- 4 SAMPLED SOFTMAX -->
+<section class="slide">
+  <div class="kicker">Step 2 · Sampled Softmax — Approximate the Sum</div>
+  <h2>Draw a tiny sample S of items. Pretend the catalog is just S.</h2>
+  <div class="beat coach" data-say="Natural idea: instead of summing over all one billion dresses, sum over just a few hundred, randomly sampled. Use a sample set S.">
+    Instead of summing 10⁹ terms, sum over a <b>sample S</b> of maybe 1000:</div>
+  <div class="beat reveal">
+    <div class="eq">
+    L̂ &nbsp;=&nbsp; −log &nbsp;
+    <span style="display:inline-block;vertical-align:middle">
+      <span class="n" style="border-bottom:1.5px solid #333;padding-bottom:3px;display:block">exp(u · v⁺)</span>
+      <span class="d" style="display:block;padding-top:3px">exp(u · v⁺) &nbsp;+&nbsp; Σ<sub>k ∈ S</sub> exp(u · v<sub>k</sub>)</span></span></div>
+    <p class="sub" style="margin-top:.5rem;font-size:.95rem">The denominator is now: <b>the positive</b> + <b>the sample of negatives</b>. Cheap. One nice problem solved. One subtle problem invited.</p></div>
+  <div class="beat reveal" data-say="The subtle problem: if your sampling is uniform you waste capacity on obviously-wrong negatives. If your sampling is NOT uniform, your loss is biased — you are measuring the wrong thing. We will meet both of those in the next two slides.">
+    Two new problems, meet them one at a time:<br>
+    <span class="rose">• Problem A:</span> uniform sampling wastes you on obvious negatives (sports gear when Alice is shopping dresses).<br>
+    <span class="rose">• Problem B:</span> any non-uniform sampling makes L̂ a <b>biased</b> estimator of L. You'd be optimizing the wrong thing. ← <b>this is what logQ fixes.</b></div>
+</section>
+<div class="notes">The common confusion: students think "sampling" means "it still works, just approximately." It doesn't — biased sampling leads to systematically wrong gradients. Importance sampling / logQ is what rescues the math.</div>
+
+<!-- 5 IN-BATCH -->
+<section class="slide">
+  <div class="kicker">Step 3 · In-Batch Negatives — The Free Trick</div>
+  <h2>If you're training on a batch of 512 (user, dress) pairs anyway, you already have 511 free negatives per row.</h2>
+  <div class="beat coach" data-say="Each training row is a user plus the dress they clicked. For Alice in row one, the clicked dresses in rows 2 through 512 are, almost certainly, not her clicks. Their embeddings are already computed by the item tower. So we get 511 negatives per row, for free.">
+    Your batch is a stack of 512 (user, clicked-dress) pairs. For <b>Alice</b> at row 1, the clicked dresses in rows 2 … 512 are almost certainly <em>not</em> hers → treat them as her <span class="teal">negatives</span>. Their embeddings? <b>Already computed.</b> Compute cost: zero.</div>
+  <div class="beat reveal" data-say="This is the trick that made two-tower models cheap enough to train at web scale. But there is a cost: the negatives are not uniformly sampled from the catalog. They are sampled proportional to how often each dress is clicked. Popular dresses show up constantly as negatives for other users. Rare dresses, almost never.">
+    <b>But Q(dress)</b> — the probability a dress appears in the batch as "someone's positive" (and so as everyone else's negative) — is <b class="rose">proportional to its popularity</b>, not uniform.<br><br>
+    Popular dresses: appear as a negative constantly. Rare dresses: barely at all. The model, if left alone, will learn to <b class="rose">systematically under-rank popular items</b> — because it keeps getting punished for scoring them highly when they were someone else's positive, not Alice's.</div>
+  <div class="beat reveal">
+    <b>This is the "popularity skew" in the slide you asked about.</b> Next slide: how logQ exactly undoes it.</div>
+</section>
+<div class="notes">The popularity-skew intuition is key. Alice likes boho florals. The LBD (little black dress) is popular overall — appears as 50 users' positive in a batch of 100 → shows up as a negative for 50+ other users every batch. Without correction, the model learns "LBD is bad for everyone" — wrong!</div>
+
+<!-- 6 LOGQ MATH -->
+<section class="slide">
+  <div class="kicker">Step 4 · logQ, Line by Line</div>
+  <h2>Importance sampling, wearing a disguise.</h2>
+  <div class="beat coach" data-say="We want the sum over the full catalog. We only have the sum over a biased sample. Importance sampling says: divide every sample by its sampling probability, and the expected value becomes the full sum. In log space, that division becomes a subtraction.">
+    We want the full-catalog sum. We have a sampled sum. <b>Importance sampling</b> turns one into an unbiased estimate of the other by <b>dividing</b> each term by its sampling probability. Walk with me:</div>
+  <div class="beat reveal">
+    <div class="eq">
+    <span style="color:var(--dim)"># what we want:</span> &nbsp;&nbsp; Z = Σ<sub>k ∈ V</sub> exp(u · v<sub>k</sub>) &nbsp;&nbsp; <span style="color:var(--dim)">(impossible)</span></div>
+    <div class="eq">
+    <span style="color:var(--dim)"># importance-sampled estimator:</span> &nbsp;&nbsp; Ẑ = (1/n) · Σ<sub>k ∈ S</sub> &nbsp;
+    <span style="display:inline-block;vertical-align:middle">
+      <span style="border-bottom:1.5px solid #333;padding-bottom:3px;display:block">exp(u · v<sub>k</sub>)</span>
+      <span style="display:block;padding-top:3px">Q(k)</span></span></div>
+    <div class="eq">
+    <span style="color:var(--dim)"># equivalent (push Q into the exponent):</span> &nbsp;&nbsp; Ẑ = (1/n) · Σ<sub>k ∈ S</sub> exp( u · v<sub>k</sub> <span class="hl">− log Q(k)</span> )</div>
+    <p class="sub" style="font-size:.95rem;margin-top:.4rem">And there's logQ. It's the <b>same math</b> as importance sampling, moved into the exponent.</p></div>
+</section>
+<div class="notes">Mathematically: exp(a)/Q = exp(a) · exp(-log Q) = exp(a - log Q). The correction term sits in the exponent so the whole thing still looks like a softmax. The sampled softmax with logQ correction is an unbiased estimator of the full softmax.</div>
+
+<!-- 7 LOGQ NUMBERS -->
+<section class="slide">
+  <div class="kicker">Step 4 (cont'd) · logQ with Real Numbers</div>
+  <h2>Two dresses, same score, different popularity. Watch what logQ does.</h2>
+  <table>
+    <tr><th>Dress</th><th>raw score u·v</th><th>popularity Q</th><th>−log Q</th><th>corrected score</th></tr>
+    <tr><td>👗 <b>LBD</b> (super popular)</td><td class="num">2.0</td><td class="num">0.5</td><td class="num">+0.69</td><td class="num">2.69</td></tr>
+    <tr><td>🌸 Rare boho piece</td><td class="num">2.0</td><td class="num">0.005</td><td class="num">+5.30</td><td class="num">7.30</td></tr>
+  </table>
+  <p class="sub">Both had the same raw dot product. But the rare boho piece appears in the sample 100× less often than the LBD — so when it DOES appear in the denominator, it must <b>stand in for the hundred other unsampled rare dresses with similar scores</b>. logQ amplifies its weight by exactly the right amount to make this stand-in honest.</p>
+  <div class="beat coach" data-say="One sentence to carry away: adding negative log Q to every score makes the sampled softmax give the same gradient, in expectation, as if you had summed over the entire billion-item catalog. That is why the slide called it the senior tell. It is a tiny line of code that preserves correctness at planetary scale.">
+    <b>One sentence:</b> adding −log Q(k) to every item's score makes the sampled softmax give, <em>in expectation</em>, the <b>same gradient</b> as the impossible full-catalog softmax. Tiny line of code, correctness preserved at planetary scale.</div>
+</section>
+<div class="notes">Google ships this in TensorFlow Recommenders as `tfrs.tasks.Retrieval(remove_accidental_hits=True, sampling_probability=...)`. The "senior tell" is remembering to pass in Q (or use sampled_softmax_loss with sampled_values) — forgetting silently biases training. Cite Yi et al., "Sampling-Bias-Corrected Neural Modeling for Large Corpus Item Recommendations" (Google, 2019).</div>
+
+<!-- 8 CONTRASTIVE -->
+<section class="slide">
+  <div class="kicker">Step 5 · The Same Thing, Called Contrastive Learning</div>
+  <h2>Pull positives close. Push negatives away. <em>Simultaneously</em>, in one loss.</h2>
+  <div class="beat coach" data-say="Contrastive learning is a rebranding more than a new idea. The same loss we just wrote, interpreted as a physics simulation: positives get pulled toward the user vector, negatives get pushed away. Look at the loss again and see both forces inside it.">
+    <b>Contrastive learning</b> is a reframe: the softmax loss as a <em>physics simulation</em>.</div>
+  <div class="beat reveal">
+    <div class="eq" style="font-size:1rem">
+    L &nbsp;=&nbsp; −log &nbsp;
+    <span style="display:inline-block;vertical-align:middle">
+      <span class="n" style="border-bottom:1.5px solid #333;padding-bottom:3px;display:block">exp(u · v⁺ <span style="color:#999">/ τ</span>)</span>
+      <span class="d" style="display:block;padding-top:3px">Σ<sub>k</sub> exp(u · v<sub>k</sub> <span style="color:#999">/ τ</span>)</span></span>
+    &nbsp;&nbsp;&nbsp; <span style="color:var(--dim)">( ← "InfoNCE loss")</span></div>
+    <p style="font-family:'Segoe UI',sans-serif;font-size:.98rem;line-height:1.7;max-width:70ch">
+    ① <b class="rose">Minimize −log(numerator)</b>  ⇒  make <span class="eq">u · v⁺</span> big.
+       <span style="color:var(--dim)">   The positive gets <b>pulled toward</b> Alice.</span><br>
+    ② <b class="rose">Minimize log(denominator)</b> ⇒  make every <span class="eq">u · v<sub>k</sub></span> small.
+       <span style="color:var(--dim)">   Every negative gets <b>pushed away from</b> Alice.</span><br>
+    ③ <span class="eq">τ</span> (<b>temperature</b>): small τ → sharp (really commit to the top); large τ → diffuse (gentler gradients).</p></div>
+  <div class="beat reveal" data-say="This loss powers CLIP, the model matching images to text. It powers SimCLR for self-supervised vision. And it powers the two-tower retrieval model we started with. Sampled softmax, in-batch contrastive, InfoNCE, CLIP — same equation, different stories.">
+    Same equation powers <b>CLIP</b> (images ↔ text), <b>SimCLR</b> (self-supervised vision), <b>two-tower retrieval</b> (users ↔ items). "Sampled softmax" and "contrastive learning" and "InfoNCE" and "CLIP loss" are all names for <em>this one line</em>.</div>
+</section>
+<div class="notes">CLIP's one-sentence summary: train an image encoder and a text encoder so matching (image, caption) pairs dot-product high and non-matching pairs dot-product low — on a batch of 32k. Exact same recipe as two-tower, with modalities instead of users+items.</div>
+
+<!-- 9 PLOTLY ANIMATION -->
+<section class="slide">
+  <div class="kicker">Watch It Happen · Alice Finds Her Aisle</div>
+  <h2>60 dresses in 3-D embedding space. Press ▶ and watch Alice's vector move during training.</h2>
+  <div class="plot" id="plot3d" style="width:900px;height:460px;max-width:95%"></div>
+  <div class="ctl">
+    <button class="btn" id="playbtn">▶ play training</button>
+    <button class="btn" id="resetbtn">↺ reset Alice</button>
+    <span style="margin-left:1rem"><b class="gold">★ Alice</b> (user vector) · <b class="rose">● her positives</b> (boho dresses she clicked) · other colors = other style clusters</span>
+  </div>
+  <p class="sub">Spin the plot with your mouse; hover any dress for its label. Alice starts at the origin (random init). Each frame = one training update: positives <b class="rose">pull</b> her, random in-batch negatives <b class="teal">push</b> gently away. She drifts into the boho neighborhood where the dresses she'll be recommended live.</p>
+</section>
+<div class="notes">The animation deliberately uses only pure PyTorch-style vanilla gradient descent (no learning-rate tricks) so the trajectory is a clean approach to the boho centroid. Point out: this is a TOY — real embeddings are 64-d or 128-d and this is 3-d for plotting. PCA is one way we'd project a 64-d trained embedding down to 3-d for visualization (segue to next slide).</div>
+
+<!-- 10 SCANN VS PCA -->
+<section class="slide">
+  <div class="kicker">Your Side-Question · Why ScaNN and Not Just PCA?</div>
+  <h2>They're not competitors. They solve different problems.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3>PCA · a dimensionality-reduction tool</h3>
+      <p><b>Input:</b> a matrix of vectors. <b>Output:</b> a smaller matrix of vectors (fewer dims), via linear projection onto the directions of largest variance.<br><br>
+      <b>What it preserves:</b> ℓ₂ distances (approximately). <b>What it's for:</b> visualization (768-d → 3-d), compression, noise reduction, feature engineering.<br><br>
+      <b>What it is NOT:</b> a search algorithm. After PCA you still need to scan every dress to find Alice's top-10.</p>
+    </div>
+    <div class="col card">
+      <h3>ScaNN · an approximate nearest-neighbor search index</h3>
+      <p><b>Input:</b> a billion vectors + a query vector. <b>Output:</b> the top-k by inner product, in milliseconds.<br><br>
+      <b>What it preserves:</b> the <em>ranking</em> of inner products — which dress is best, not the exact score. <b>What it's for:</b> serving.<br><br>
+      <b>Its special trick — anisotropic quantization:</b> when ScaNN compresses each dress vector, it allows error <b>perpendicular</b> to typical query vectors (perpendicular error doesn't change the dot product) but penalizes error <b>parallel</b> to them (parallel error changes rankings). PCA has no such query-awareness — every direction is equal to it.</p>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:.8rem"><b>The right picture:</b> you can even use PCA <em>inside</em> ScaNN (compress 768-d → 128-d with PCA, then build a ScaNN index on top). But PCA alone makes retrieval smaller, not faster. ScaNN makes it fast by not comparing against every dress at all — it partitions the embedding space into regions, searches only the relevant partitions, and inside each partition uses its ranking-aware quantization.</p>
+</section>
+<div class="notes">The one-sentence answer: PCA compresses, ScaNN searches. Anisotropic quantization (Guo et al. 2020, Google) is the headline algorithmic win: inner-product-aware loss function for the quantization step. PCA minimizes ℓ₂ reconstruction error, which can be arbitrarily bad for inner-product ranking if the lost variance happens to align with query directions.</div>
+
+<!-- 11 RECAP -->
+<section class="slide">
+  <div class="kicker">Take This With You</div>
+  <h1 style="font-size:2rem">The arc: <span class="rose">impossible softmax</span> → <span class="rose">sample it</span> → <span class="rose">batch the samples for free</span> → <span class="rose">subtract log Q</span> to make the sampling honest → the same equation is called <span class="rose">contrastive learning / InfoNCE / CLIP</span>, where it reads as "pull positives, push negatives."</h1>
+  <p class="sub" style="margin-top:1.1rem">And when you need to <em>serve</em> the result, you reach for ScaNN — not because PCA is bad, but because PCA compresses while ScaNN searches, and only one of those is a retrieval system.</p>
+</section>
+<div class="notes">Belt-check: she now owns (a) the derivation of logQ from importance sampling, (b) the pull-push mental model, (c) the CLIP/InfoNCE/sampled-softmax equivalence, (d) the PCA vs ScaNN clarification. If she can repeat the arc in the recap slide aloud, the concept is locked in.</div>
+
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">→ next thought · ← previous · N notes · 🎛 bottom-right</div>
+<div class="beatHint" id="beatHint">→ for the next thought…</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+
+/* ------- 3D Plotly embedding animation ------- */
+function seedRand(seed){let s=seed;return()=>{s=(s*1664525+1013904223)|0;return((s>>>0)/4294967296);};}
+const rng = seedRand(20261103);
+const CLUSTERS = [
+  { name:'🌸 boho floral', c:[3.2, 3.0, 1.2], color:'#e85d9e' },
+  { name:'🍷 cocktail',    c:[-3.0, 2.2, 0.0], color:'#6d28d9' },
+  { name:'🏃 athletic',    c:[0.2,-3.0, 2.1], color:'#0d9488' },
+  { name:'💼 work',        c:[-1.2,-1.0,-3.0], color:'#3b4252' },
+];
+const DRESSES = [];
+CLUSTERS.forEach((cl, ci) => {
+  for (let k=0; k<15; k++) {
+    DRESSES.push({
+      cluster: ci, color: cl.color, label: cl.name + ' #' + (k+1),
+      x: cl.c[0] + (rng()-0.5)*1.4,
+      y: cl.c[1] + (rng()-0.5)*1.4,
+      z: cl.c[2] + (rng()-0.5)*1.4,
+    });
+  }
+});
+/* Alice's positives: 3 boho dresses */
+const POS_IDX = [0, 4, 9];  /* indices into DRESSES — three boho pieces */
+/* Alice trajectory: random init → drifts toward boho centroid under contrastive loss */
+const STEPS = 20;
+const alicePath = [];
+let ap = [-0.5, 0.6, 1.3];  /* a random init, not origin, so the path has personality */
+alicePath.push([...ap]);
+for (let t=1; t<=STEPS; t++) {
+  /* pull toward each positive */
+  let grad = [0,0,0];
+  POS_IDX.forEach(i => {
+    const d = DRESSES[i];
+    grad[0] += (d.x - ap[0]);
+    grad[1] += (d.y - ap[1]);
+    grad[2] += (d.z - ap[2]);
+  });
+  /* push from a handful of random in-batch negatives (weaker) */
+  for (let j=0; j<5; j++) {
+    const n = DRESSES[Math.floor(rng()*DRESSES.length)];
+    if (POS_IDX.includes(DRESSES.indexOf(n))) continue;
+    const dx = n.x-ap[0], dy = n.y-ap[1], dz = n.z-ap[2];
+    const d2 = dx*dx+dy*dy+dz*dz + 1e-3;
+    grad[0] -= 0.25*dx/d2; grad[1] -= 0.25*dy/d2; grad[2] -= 0.25*dz/d2;
+  }
+  const lr = 0.18;
+  ap = [ap[0]+lr*grad[0]/3, ap[1]+lr*grad[1]/3, ap[2]+lr*grad[2]/3];
+  alicePath.push([...ap]);
+}
+
+function basePlot() {
+  const traces = CLUSTERS.map((cl,ci) => {
+    const members = DRESSES.filter(d => d.cluster===ci);
+    return {
+      type: 'scatter3d', mode: 'markers', name: cl.name,
+      x: members.map(d=>d.x), y: members.map(d=>d.y), z: members.map(d=>d.z),
+      text: members.map(d=>d.label), hoverinfo:'text',
+      marker: { size: 6, color: cl.color, opacity: 0.75,
+                line:{width:0} }
+    };
+  });
+  /* highlight Alice's positives with a bigger rose ring */
+  const positives = POS_IDX.map(i => DRESSES[i]);
+  traces.push({
+    type:'scatter3d', mode:'markers', name:"Alice's positives (clicked)",
+    x: positives.map(d=>d.x), y: positives.map(d=>d.y), z: positives.map(d=>d.z),
+    text: positives.map(d=>'❤ '+d.label), hoverinfo:'text',
+    marker: { size:11, color:'#e85d9e', symbol:'circle', opacity:1.0,
+              line:{color:'#8b2a3e', width:2}}
+  });
+  /* Alice as a gold star at her current (initial) position */
+  traces.push({
+    type:'scatter3d', mode:'markers+text', name:'★ Alice (user vector)',
+    x:[alicePath[0][0]], y:[alicePath[0][1]], z:[alicePath[0][2]],
+    text:['★ Alice'], textposition:'top center',
+    textfont:{color:'#8b6914', size:14, family:'Segoe UI'},
+    marker:{size:18, color:'#c89b4e', symbol:'diamond',
+            line:{color:'#8b6914', width:3}}
+  });
+  /* dashed trail of Alice's path so far (initially empty) */
+  traces.push({
+    type:'scatter3d', mode:'lines', name:'Alice trajectory',
+    x:[alicePath[0][0]], y:[alicePath[0][1]], z:[alicePath[0][2]],
+    line:{color:'#c89b4e', width:3, dash:'dot'}, showlegend:false
+  });
+  return traces;
+}
+const layout3d = {
+  margin:{l:0,r:0,t:10,b:0},
+  paper_bgcolor:'#fff', plot_bgcolor:'#fff',
+  scene:{
+    xaxis:{title:'dim 1',gridcolor:'#eee',zerolinecolor:'#ddd',backgroundcolor:'#fdf4f0'},
+    yaxis:{title:'dim 2',gridcolor:'#eee',zerolinecolor:'#ddd',backgroundcolor:'#fdf4f0'},
+    zaxis:{title:'dim 3',gridcolor:'#eee',zerolinecolor:'#ddd',backgroundcolor:'#fdf4f0'},
+    camera:{eye:{x:1.5,y:1.5,z:1.2}}
+  },
+  legend:{x:0, y:1, bgcolor:'rgba(255,255,255,0.7)', bordercolor:'#e8d4ce', borderwidth:1, font:{size:10}},
+};
+function initPlot(){
+  if (!document.getElementById('plot3d')) return;
+  Plotly.newPlot('plot3d', basePlot(), layout3d, {displayModeBar:false, responsive:true});
+}
+/* animate: step through alicePath, updating Alice's marker + trail */
+let animTimer = null, animStep = 0;
+function stepAnim(){
+  if (animStep >= alicePath.length) { clearInterval(animTimer); animTimer=null; return; }
+  const pos = alicePath[animStep];
+  const trail = alicePath.slice(0, animStep+1);
+  /* Alice marker trace is the second-to-last, trail is the last */
+  const starIdx = CLUSTERS.length + 1;      /* 4 clusters + 1 positives trace = index 5 */
+  const trailIdx = starIdx + 1;
+  Plotly.restyle('plot3d', {x:[[pos[0]]], y:[[pos[1]]], z:[[pos[2]]]}, [starIdx]);
+  Plotly.restyle('plot3d', {
+    x:[trail.map(p=>p[0])], y:[trail.map(p=>p[1])], z:[trail.map(p=>p[2])]
+  }, [trailIdx]);
+  animStep++;
+}
+function playAnim(){ if (animTimer) return; if (animStep >= alicePath.length) animStep=0;
+  animTimer = setInterval(stepAnim, 220); }
+function resetAnim(){ clearInterval(animTimer); animTimer=null; animStep=0; initPlot(); }
+
+/* wire buttons after slide 9 has been shown at least once (lazy init) */
+let plotInit = false;
+function ensurePlot(){ if (plotInit) return;
+  plotInit = true; initPlot();
+  document.getElementById('playbtn').addEventListener('click', e=>{ e.stopPropagation(); playAnim(); });
+  document.getElementById('resetbtn').addEventListener('click', e=>{ e.stopPropagation(); resetAnim(); }); }
+
+/* ---------- beats + nav ---------- */
+const beatShown=slides.map(()=>0);
+function syncBeats(idx){ const bs=[...slides[idx].querySelectorAll(".beat")];
+  bs.forEach((b,k)=>b.classList.toggle("on",k<beatShown[idx]));
+  document.getElementById("beatHint").style.display=beatShown[idx]<bs.length?"block":"none"; }
+function fireBeat(idx){ const bs=slides[idx].querySelectorAll(".beat"), b=bs[beatShown[idx]-1]; if(!b) return;
+  if(b.dataset.say && window.CalmAudio) CalmAudio.Voice.speak(b.dataset.say); }
+let i=0;
+function show(n){ window.CalmAudio&&CalmAudio.Voice.stop();
+  i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length;
+  if(slides[i].querySelectorAll(".beat").length && beatShown[i]===0){ beatShown[i]=1; fireBeat(i); }
+  syncBeats(i);
+  if (slides[i].querySelector('#plot3d')) setTimeout(ensurePlot, 50);
+}
+function advance(){ const bs=slides[i].querySelectorAll(".beat");
+  if(beatShown[i]<bs.length){ beatShown[i]++; syncBeats(i); fireBeat(i); return; } show(i+1); }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown') advance();
+  else if(e.key==='ArrowLeft'||e.key==='PageUp') show(i-1);
+  else if(e.key.toLowerCase()==='n') document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f') document.documentElement.requestFullscreen?.();
+});
+show(0);
+</script>
+</body>
+</html>

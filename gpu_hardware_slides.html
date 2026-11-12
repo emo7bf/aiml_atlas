@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Why GPUs Win: The Hardware Story</title>
+<style>
+  :root {
+    --bg: #0e1117; --panel: #161b24; --ink: #e8ecf1; --dim: #8b95a7;
+    --accent: #76b900; --accent2: #4da3ff; --warn: #ffb454;
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", system-ui, sans-serif; overflow:hidden;
+         background-image: linear-gradient(75deg, rgba(118,185,0,.055) 1px, transparent 1px),
+                           linear-gradient(-15deg, rgba(118,185,0,.055) 1px, transparent 1px);
+         background-size: 4.5vmin 4.5vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:6vh 7vw; flex-direction:column; justify-content:center; }
+  .slide.active { display:flex; }
+  .kicker { color: var(--accent); font-size:1.1rem; letter-spacing:.25em; text-transform:uppercase; margin-bottom:1.2rem; font-weight:600; }
+  h1 { font-size:3.4rem; line-height:1.15; font-weight:700; max-width:28ch; }
+  h2 { font-size:2.5rem; line-height:1.2; font-weight:700; margin-bottom:2.5rem; max-width:32ch; }
+  .sub { color: var(--dim); font-size:1.3rem; margin-top:1.5rem; max-width:55ch; }
+  .big { font-size:6rem; font-weight:800; color:var(--accent); line-height:1; }
+  .biglabel { font-size:1.4rem; color:var(--dim); margin-top:1rem; }
+  .cols { display:flex; gap:3rem; align-items:stretch; }
+  .col { flex:1; }
+  .card { background:var(--panel); border-radius:14px; padding:1.6rem 1.8rem; border:1px solid #232a38; }
+  .card h3 { font-size:1.25rem; margin-bottom:.6rem; }
+  .card p { color:var(--dim); font-size:1.05rem; line-height:1.45; }
+  .vs { display:flex; align-items:center; justify-content:center; font-size:1.6rem; color:var(--dim); padding:0 .5rem; }
+  .cpu-accent h3 { color:var(--accent2); } .gpu-accent h3 { color:var(--accent); }
+  .term { color:var(--accent); font-family:var(--mono); font-size:.95em; }
+  .term2 { color:var(--accent2); font-family:var(--mono); font-size:.95em; }
+  .stack { display:flex; flex-direction:column; gap:.6rem; max-width:620px; }
+  .layer { padding:.9rem 1.4rem; border-radius:10px; display:flex; justify-content:space-between; align-items:baseline; font-size:1.15rem; }
+  .layer .lat { font-family:var(--mono); font-size:.95rem; color:var(--bg); opacity:.75; }
+  .flow { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; }
+  .fnode { background:var(--panel); border:1px solid #2a3446; border-radius:10px; padding:1rem 1.4rem; text-align:center; }
+  .fnode b { display:block; font-size:1.15rem; } .fnode span { color:var(--dim); font-size:.9rem; }
+  .arr { color:var(--accent); font-size:1.8rem; }
+  table { border-collapse:collapse; font-size:1.15rem; width:100%; max-width:860px; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:.6rem 1.2rem .6rem 0; border-bottom:2px solid #2a3446; }
+  td { padding:.65rem 1.2rem .65rem 0; border-bottom:1px solid #1f2634; }
+  td.num { font-family:var(--mono); color:var(--accent); }
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#0a0d12f2; border-top:2px solid var(--accent); padding:1.1rem 7vw; font-size:1rem; color:#c7cfdb; line-height:1.5; display:none; max-height:38vh; overflow:auto; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#3a4456; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#3a4456; font-size:.85rem; }
+  .namedrop { margin-top:2rem; font-size:1rem; color:var(--warn); font-family:var(--mono); }
+  ul.clean { list-style:none; font-size:1.3rem; line-height:2; }
+  ul.clean li::before { content:"▸ "; color:var(--accent); }
+  .nd { color:var(--warn); border-bottom:1px dashed var(--warn); cursor:help; font-family:var(--mono); font-size:.95em; }
+  #tip { position:fixed; z-index:50; max-width:470px; background:#07090d; border:1px solid var(--warn);
+         border-radius:12px; padding:1rem 1.2rem; font-size:.92rem; line-height:1.5; display:none; box-shadow:0 12px 40px #000c; }
+  #tip .t-name { color:var(--warn); font-weight:700; font-size:1.05rem; }
+  #tip .t-cat { color:var(--dim); font-size:.78rem; text-transform:uppercase; letter-spacing:.15em; margin-left:.6rem; }
+  #tip .t-row { margin-top:.5rem; color:#d9dfe8; }
+  #tip .t-row b { color:var(--accent); font-weight:600; }
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">GPU Hardware · Interview Edition</div>
+  <h1>A GPU is a <span style="color:var(--accent)">throughput machine</span>.<br>Everything else follows.</h1>
+  <p class="sub">The hardware logistics behind every task on your list — training, inference, graphics, simulation — in the vocabulary a Google interviewer expects.</p>
+  <div class="namedrop">press → to advance · N for speaker notes (the name-drops live there)</div>
+</section>
+<div class="notes">Framing line to open with: "CPUs are latency machines; GPUs are throughput machines." That one sentence signals you understand the design philosophy split — it's the thesis of the whole deck.</div>
+
+<!-- 2 CPU vs GPU -->
+<section class="slide">
+  <div class="kicker">Design Philosophy</div>
+  <h2>CPUs minimize latency per thread. GPUs maximize throughput across thousands.</h2>
+  <div class="cols">
+    <div class="col card cpu-accent">
+      <h3>CPU: few fat cores</h3>
+      <p>8–64 cores. Huge caches, <span class="term2">branch prediction</span>, <span class="term2">out-of-order execution</span>, <span class="term2">speculative execution</span>. Silicon spent making ONE instruction stream fast.</p>
+    </div>
+    <div class="vs">vs</div>
+    <div class="col card gpu-accent">
+      <h3>GPU: thousands of thin cores</h3>
+      <p>An H100 has <span class="term">16,896 CUDA cores</span> across <span class="term">132 SMs</span>. Minimal control logic per core — silicon spent on raw ALUs. Latency is <em>hidden</em>, not avoided.</p>
+    </div>
+  </div>
+  <div class="namedrop">name-drops: SM (Streaming Multiprocessor) · SIMT · latency hiding</div>
+</section>
+<div class="notes">Key phrase: "GPUs hide latency with parallelism instead of avoiding it with caches." When one warp stalls on memory, the warp scheduler instantly swaps in another — zero-cost context switch because register state stays resident. Contrast: CPU context switches cost microseconds; GPU warp switches cost nothing.</div>
+
+<!-- 3 EXECUTION MODEL -->
+<section class="slide">
+  <div class="kicker">Execution Model</div>
+  <h2>The unit of execution is the warp: 32 threads in lockstep.</h2>
+  <div class="flow">
+    <div class="fnode"><b>Grid</b><span>whole kernel launch</span></div>
+    <div class="arr">→</div>
+    <div class="fnode"><b>Thread Block</b><span>scheduled onto one SM</span></div>
+    <div class="arr">→</div>
+    <div class="fnode"><b>Warp</b><span>32 threads · SIMT</span></div>
+    <div class="arr">→</div>
+    <div class="fnode"><b>Thread</b><span>one lane, own registers</span></div>
+  </div>
+  <p class="sub">This is <span class="term">SIMT</span> — Single Instruction, Multiple Threads. One instruction decoder drives 32 lanes. That's why control logic is cheap and ALUs are plentiful.</p>
+  <div class="namedrop">name-drops: kernel · grid/block/warp hierarchy · warp scheduler · occupancy</div>
+</section>
+<div class="notes">Occupancy = how many warps are resident per SM, which determines latency-hiding ability. Caveat to drop: high occupancy isn't always optimal — register pressure trades against it (cite Volkov's "Better Performance at Lower Occupancy"). Also mention branch divergence here: if threads in a warp take different branches, both paths execute serially with lanes masked off — this is why GPUs hate branchy code.</div>
+
+<!-- 4 MEMORY HIERARCHY -->
+<section class="slide">
+  <div class="kicker">Memory Hierarchy</div>
+  <h2>Performance is won and lost in the memory hierarchy.</h2>
+  <div class="stack">
+    <div class="layer" style="background:#76b900; color:#0e1117; width:45%"><b>Registers</b><span class="lat">~0 cyc · per thread</span></div>
+    <div class="layer" style="background:#9ccf4d; color:#0e1117; width:60%"><b>Shared Memory / L1</b><span class="lat">~30 cyc · per SM, programmer-managed</span></div>
+    <div class="layer" style="background:#c9d98a; color:#0e1117; width:78%"><b>L2 Cache</b><span class="lat">~200 cyc · 50 MB, chip-wide</span></div>
+    <div class="layer" style="background:#e8e2c8; color:#0e1117; width:100%"><b><span class="nd" data-key="hbm" style="color:#7a5200; border-color:#7a5200">HBM3</span> (global memory)</b><span class="lat">~400+ cyc · 80 GB @ 3.35 TB/s</span></div>
+  </div>
+  <p class="sub">Rule: <span class="term">memory coalescing</span> — adjacent threads must read adjacent addresses, or a warp's one memory transaction becomes 32.</p>
+  <div class="namedrop">name-drops: HBM3/HBM3e · shared memory tiling · coalesced access · bank conflicts</div>
+</section>
+<div class="notes">HBM = High Bandwidth Memory: DRAM dies 3D-stacked next to the GPU die on a silicon interposer — that's how you get 3.35 TB/s vs ~100 GB/s DDR5 on a CPU. "Shared memory" is a programmer-managed scratchpad (unlike CPU caches which are hardware-managed) — tiling matmul into shared memory is THE canonical CUDA optimization. Bonus term: bank conflicts (shared memory has 32 banks; two threads hitting the same bank serialize).</div>
+
+<!-- 5 ROOFLINE -->
+<section class="slide">
+  <div class="kicker">The Real Bottleneck</div>
+  <div class="big">~300 : 1</div>
+  <div class="biglabel">FLOPs an H100 can do per byte it can fetch from HBM (BF16 dense)</div>
+  <p class="sub">The <span class="nd" data-key="roofline">roofline model</span>: a kernel's <span class="term">arithmetic intensity</span> (FLOPs/byte) decides whether it's <b>compute-bound</b> (matmul) or <b>memory-bound</b> (almost everything else — attention, normalization, elementwise ops). The memory-bound fixes: <span class="nd" data-key="kernel-fusion">kernel fusion</span> and <span class="nd" data-key="flashattention">FlashAttention</span>.</p>
+  <div class="namedrop">name-drops: roofline model · arithmetic intensity · memory-bound vs compute-bound · kernel fusion</div>
+</section>
+<div class="notes">This is the single highest-leverage concept in a performance interview. Most deep learning ops are memory-bound, which is why kernel fusion (do more math per byte loaded) matters, and why FlashAttention is famous: it restructures attention to be IO-aware, keeping intermediates in SRAM/shared memory instead of round-tripping to HBM (Tri Dao, 2022). Drop "Horace He's 'GPUs Go Brrr' taxonomy: compute-bound, memory-bound, overhead-bound."</div>
+
+<!-- 6 TENSOR CORES -->
+<section class="slide">
+  <div class="kicker">Specialized Silicon</div>
+  <h2>Tensor Cores do one thing: small matrix multiply-accumulate, in one clock.</h2>
+  <div class="cols">
+    <div class="col card"><h3>The operation</h3><p><span class="term">D = A×B + C</span> on 4×4 (and larger) tiles, fused. CUDA cores do scalar FMA; Tensor Cores do a whole <span class="term">MMA</span> per instruction.</p></div>
+    <div class="col card"><h3>The precision ladder</h3><p>FP64 → FP32 → <span class="term">TF32</span> → <span class="nd" data-key="bf16">BF16</span>/FP16 → <span class="nd" data-key="fp8">FP8</span> → FP4. Each step down ≈ doubles throughput. <span class="term">Mixed precision</span>: compute low, accumulate in FP32.</p></div>
+  </div>
+  <p class="sub">Google's answer to the same insight: the <span class="nd" data-key="tpu">TPU systolic array</span> — a grid of MACs where data flows through, weights stay put.</p>
+  <div class="namedrop">name-drops: Tensor Core · MMA · BF16 (invented at Google Brain) · FP8 Transformer Engine · systolic array</div>
+</section>
+<div class="notes">BF16 is a Google Brain invention: same 8-bit exponent as FP32 (same dynamic range, no loss-scaling gymnastics), truncated mantissa. H100's "Transformer Engine" dynamically picks FP8 vs FP16 per layer. TPU contrast is a great Google interview move: TPUs are systolic arrays (Kung & Leiserson, 1979 concept) — a 128×128 or 256×256 grid of multiply-accumulate units with data pumped through like a heartbeat; no instruction fetch per op at all.</div>
+
+<!-- 7 WHY MATMUL -->
+<section class="slide">
+  <div class="kicker">Why Everything Becomes Matmul</div>
+  <h2>Matmul is O(n³) compute on O(n²) data — the one op that outruns the memory wall.</h2>
+  <ul class="clean">
+    <li>Each loaded tile is <b>reused n times</b> → high arithmetic intensity by construction</li>
+    <li><span class="term">Tiling</span> into shared memory + registers = the classic <span class="nd" data-key="gemm">GEMM</span> kernel</li>
+    <li>You never write it yourself: <span class="nd" data-key="cublas">cuBLAS / cuDNN</span>, <span class="nd" data-key="cutlass">CUTLASS</span>, or compilers (<span class="nd" data-key="triton">Triton</span>, <span class="nd" data-key="xla">XLA</span>)</li>
+  </ul>
+  <div class="namedrop">name-drops: GEMM · cuBLAS/cuDNN/CUTLASS · OpenAI Triton · XLA (Google's compiler for TPU & GPU)</div>
+</section>
+<div class="notes">This slide answers "why do GPUs crush neural nets specifically?" — because training/inference is ~90%+ GEMM, and GEMM is the rare op whose compute grows faster (n³) than its data (n²), so it can saturate the ALUs. Conv layers are lowered to GEMM via im2col or done with implicit-GEMM in cuDNN. XLA is the Google name to drop: the compiler behind JAX and TF that fuses ops and emits code for both TPUs and GPUs.</div>
+
+<!-- 8 INTERCONNECT -->
+<section class="slide">
+  <div class="kicker">Beyond One GPU</div>
+  <h2>At cluster scale, the network is part of the computer.</h2>
+  <div class="stack" style="max-width:760px">
+    <div class="layer" style="background:var(--panel); border:1px solid #2a3446"><b>PCIe Gen5</b><span class="lat" style="color:var(--dim)">~64 GB/s · host ↔ device</span></div>
+    <div class="layer" style="background:var(--panel); border:1px solid var(--accent)"><b style="color:var(--accent)"><span class="nd" data-key="nvlink">NVLink 4 + NVSwitch</span></b><span class="lat" style="color:var(--dim)">900 GB/s/GPU · all-to-all inside a node</span></div>
+    <div class="layer" style="background:var(--panel); border:1px solid var(--accent2)"><b style="color:var(--accent2)"><span class="nd" data-key="infiniband">InfiniBand / RDMA</span> (or Google ICI for TPU pods)</b><span class="lat" style="color:var(--dim)">400–800 Gb/s · across nodes</span></div>
+  </div>
+  <p class="sub">Collectives run on <span class="nd" data-key="nccl">NCCL</span> — <span class="nd" data-key="all-reduce">ring / tree all-reduce</span> to average gradients without a central bottleneck.</p>
+  <div class="namedrop">name-drops: NVLink/NVSwitch · NCCL all-reduce · GPUDirect RDMA · TPU pod ICI + optical circuit switching</div>
+</section>
+<div class="notes">Ring all-reduce (popularized by Baidu, then Horovod) moves 2(N-1)/N × data per GPU regardless of GPU count — bandwidth-optimal. GPUDirect RDMA lets the NIC DMA straight into GPU memory, skipping the CPU. Google flex: TPU v4 pods use optical circuit switches (OCS) to reconfigure the pod topology — cite the TPU v4 paper (Jouppi et al., ISCA 2023).</div>
+
+<!-- 9 PARALLELISM -->
+<section class="slide">
+  <div class="kicker">Scaling Training</div>
+  <h2>Three axes of parallelism, one memory budget.</h2>
+  <div class="cols">
+    <div class="col card"><h3>Data parallel</h3><p>Replicate model, split the batch, <span class="nd" data-key="all-reduce">all-reduce</span> gradients. Simple — until the model doesn't fit.</p></div>
+    <div class="col card"><h3>Tensor parallel</h3><p>Split individual matrices across GPUs (<span class="nd" data-key="megatron">Megatron-LM</span> style). Needs NVLink-class bandwidth.</p></div>
+    <div class="col card"><h3>Pipeline parallel</h3><p>Split layers across GPUs; micro-batches fill the <span class="nd" data-key="pipeline-bubble">pipeline bubble</span> (<span class="nd" data-key="gpipe">GPipe</span> — a Google paper).</p></div>
+  </div>
+  <p class="sub">Plus <span class="nd" data-key="zero">ZeRO</span> / <span class="nd" data-key="fsdp">FSDP</span> to shard optimizer state, and <span class="nd" data-key="checkpointing">activation checkpointing</span> to trade compute for memory.</p>
+  <div class="namedrop">name-drops: Megatron-LM · GPipe · ZeRO (DeepSpeed) · FSDP · 3D parallelism</div>
+</section>
+<div class="notes">Memory math worth quoting: Adam training in mixed precision costs ~16 bytes/parameter (2 wt + 2 grad + 4+4+4 optimizer states) — so a 70B model needs ~1.1 TB just for states, far beyond one 80 GB H100. That's the "why" behind all of this. "3D parallelism" = combining all three axes (Megatron-DeepSpeed). GPipe is from Google — good to cite in a Google interview.</div>
+
+<!-- 10 NUMBERS -->
+<section class="slide">
+  <div class="kicker">Back-of-the-Envelope Kit</div>
+  <h2>Numbers every candidate should be able to recite.</h2>
+  <table>
+    <tr><th>Quantity</th><th>H100 SXM</th><th>Why it matters</th></tr>
+    <tr><td>Dense BF16 compute</td><td class="num">~990 TFLOPS</td><td>ceiling for matmul</td></tr>
+    <tr><td>HBM3 bandwidth</td><td class="num">3.35 TB/s</td><td>ceiling for everything else</td></tr>
+    <tr><td>HBM capacity</td><td class="num">80 GB</td><td>model + activations budget</td></tr>
+    <tr><td>NVLink per GPU</td><td class="num">900 GB/s</td><td>tensor-parallel feasibility</td></tr>
+    <tr><td>PCIe Gen5</td><td class="num">~64 GB/s</td><td>host transfer tax</td></tr>
+    <tr><td>Kernel launch overhead</td><td class="num">~3–10 µs</td><td>why we fuse &amp; use CUDA Graphs</td></tr>
+  </table>
+  <div class="namedrop">estimation trick: inference tokens/sec ≈ bandwidth ÷ bytes-per-token (weights) — decode is memory-bound</div>
+</section>
+<div class="notes">Signature estimation for interviews: autoregressive decoding reads ALL weights per token. 70B model in FP16 = 140 GB... doesn't fit; in FP8 = 70 GB. tokens/sec/GPU ≈ 3.35 TB/s ÷ 70 GB ≈ ~48 tok/s upper bound, batch=1. This is why batching, KV-cache management (PagedAttention/vLLM), and quantization dominate inference engineering. Also know Blackwell B200 exists (~8 TB/s HBM3e, FP4) and AMD MI300X (192 GB HBM3) as the alternative.</div>
+
+<!-- 11 WHEN GPUS LOSE -->
+<section class="slide">
+  <div class="kicker">The Honest Slide</div>
+  <h2>Knowing when a GPU loses is senior-engineer signal.</h2>
+  <ul class="clean">
+    <li><b>Branch divergence</b> — warps serialize on divergent control flow</li>
+    <li><b>Serial dependencies</b> — <span class="nd" data-key="amdahl">Amdahl's Law</span>: the sequential fraction caps speedup</li>
+    <li><b>Small problems</b> — can't amortize kernel launch + PCIe transfer</li>
+    <li><b>Pointer-chasing</b> — random access defeats coalescing; graphs & trees hurt</li>
+    <li><b>Overhead-bound</b> — Python/dispatch cost dominates tiny kernels</li>
+  </ul>
+  <div class="namedrop">name-drops: Amdahl's Law vs Gustafson's Law · CUDA Graphs · overhead-bound regime</div>
+</section>
+<div class="notes">Interviewers love the counter-question "when would you NOT use a GPU?" Amdahl: speedup ≤ 1/(s + p/N). Gustafson's rebuttal: at scale, you grow the problem instead. CUDA Graphs fix launch overhead by recording a whole DAG of kernels and replaying it. Tie back to the original table: everything on it — pixels, particles, Monte Carlo trials, matrix tiles, dataframe rows — is embarrassingly parallel or tiled-parallel, which is exactly the shape this hardware demands.</div>
+
+<!-- 12 CLOSE -->
+<section class="slide">
+  <div class="kicker">The One-Breath Answer</div>
+  <h1 style="font-size:2.6rem">"A GPU trades per-thread latency for massive throughput: thousands of SIMT lanes fed by HBM, kept busy by warp-level latency hiding, accelerated by tensor cores for matmul, and stitched into one computer by NVLink and NCCL."</h1>
+  <p class="sub">Say that sentence, then go deep wherever the interviewer pulls the thread. Every noun in it is a slide in this deck.</p>
+</section>
+<div class="notes">Call to action: rehearse the one-breath answer out loud, then practice expanding any single noun (SIMT, HBM, warp, tensor core, NVLink, NCCL) into a 2-minute deep dive. That's exactly the shape of a Google systems/domain interview: breadth sentence first, depth on demand.</div>
+
+
+<!-- INTERACTIVE (v2) -->
+<section class="slide">
+  <div class="kicker">🎛 Interactive · Roofline Explorer</div>
+  <h2>Slide the intensity. Watch the kernel hit the roof.</h2>
+  <div class="aiml-widget" data-calc="roofline">
+    <div class="sl-row"><label>arithmetic intensity</label><input type="range" data-k="logI" min="-1" max="3.2" step="0.05" value="0.5"><span class="sl-val" data-k="logI"></span></div><div class="sl-row"><label>HBM bandwidth</label><input type="range" data-k="bw" min="1" max="8" step="0.05" value="3.35"><span class="sl-val" data-k="bw"></span></div><div class="sl-row"><label>peak compute (TFLOPs)</label><input type="range" data-k="peak" min="100" max="2000" step="10" value="990"><span class="sl-val" data-k="peak"></span></div>
+    <canvas width="820" height="300"></canvas>
+    <div class="wout"></div>
+  </div>
+  <p class="sub">Memory-bound left of the ridge, compute-bound right of it. Set bandwidth to 8 TB/s (B200) and watch the ridge move — faster memory makes MORE kernels compute-bound.</p>
+</section>
+<div class="notes">Demo script: start at intensity 0.25 (elementwise op) — pinned to the slope, pathetic utilization. Slide to ~5 (attention) — still memory-bound. Slide to 300+ (big GEMM) — on the roof. Then raise bandwidth and watch the ridge point slide left: hardware generations change which ops are 'fast'.</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">← → navigate · N notes · F fullscreen · hover amber = name-drop cards</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+let i=0;
+function show(n){ i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')show(i+1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+  else if(e.key.toLowerCase()==='n')document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.();
+});
+document.addEventListener('click',e=>{ if(e.target.closest('.nd')||e.target.closest('#tip'))return; if(e.clientX>innerWidth/2)show(i+1); else show(i-1); });
+show(0);
+
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div>
+      <div class="t-row"><b>Why it matters:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect();
+    let x=r.left, y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20) x=innerWidth-tw-20;
+    if(y+th>innerHeight-20) y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

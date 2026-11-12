@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Classical ML Fundamentals: The Chalkboard Round</title>
+<style>
+  :root {
+    /* Identity: chalkboard */
+    --bg: #253029; --panel: #2e3b33; --edge: #44544a;
+    --ink: #f4f1e4; --dim: #a9b5a8;
+    --ml: #fdf6d8;              /* topic accent: chalk */
+    --gpu: #a8e063;             /* shared: compute/GPU = green (chalk-brightened) */
+    --host: #8cc8ff;            /* shared: CPU/host/comm = blue (chalk-brightened) */
+    --drop: #ffc46e;            /* shared: name-drops = amber (chalk-brightened) */
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); font-family:"Segoe UI", system-ui, sans-serif; overflow:hidden;
+         background-image: linear-gradient(rgba(253,246,216,.05) 1px, transparent 1px),
+                           linear-gradient(90deg, rgba(253,246,216,.05) 1px, transparent 1px);
+         background-size: 4vmin 4vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:6vh 7vw; flex-direction:column; justify-content:center; }
+  .slide.active { display:flex; }
+  .kicker { color:var(--drop); font-size:.95rem; letter-spacing:.3em; text-transform:uppercase; margin-bottom:1.3rem; font-weight:700; }
+  h1,h2 { font-family:"Segoe Print","Comic Sans MS",cursive; font-weight:700; color:var(--ml); }
+  h1 { font-size:2.8rem; line-height:1.3; max-width:34ch; }
+  h2 { font-size:2rem; line-height:1.35; margin-bottom:1.8rem; max-width:40ch; }
+  .sub { color:var(--dim); font-size:1.18rem; margin-top:1.3rem; max-width:66ch; line-height:1.55; }
+  .eq { font-family:var(--mono); background:var(--panel); border:1px dashed var(--edge); border-radius:12px;
+        padding:1rem 1.5rem; font-size:1.4rem; color:var(--ml); display:inline-block; margin:.4rem 0; }
+  .cols { display:flex; gap:1.8rem; align-items:stretch; }
+  .col { flex:1; }
+  .card { background:var(--panel); border-radius:14px; padding:1.4rem 1.6rem; border:1px solid var(--edge); }
+  .card h3 { font-size:1.14rem; margin-bottom:.55rem; color:var(--ml); font-family:"Segoe Print",cursive; }
+  .card p { color:var(--dim); font-size:.99rem; line-height:1.5; }
+  .ml { color:var(--ml); } .gpu { color:var(--gpu); } .host { color:var(--host); }
+  ul.clean { list-style:none; font-size:1.18rem; line-height:1.95; max-width:76ch; }
+  ul.clean li::before { content:"✎ "; color:var(--drop); }
+  .nd { color:var(--drop); border-bottom:1px dashed var(--drop); cursor:help; font-family:var(--mono); font-size:.95em; }
+  #tip { position:fixed; z-index:50; max-width:470px; background:#1a211c; border:1px solid var(--drop);
+         border-radius:12px; padding:1rem 1.2rem; font-size:.92rem; line-height:1.5; display:none; box-shadow:0 12px 40px #000c; }
+  #tip .t-name { color:var(--drop); font-weight:700; font-size:1.05rem; }
+  #tip .t-cat { color:var(--dim); font-size:.78rem; text-transform:uppercase; letter-spacing:.15em; margin-left:.6rem; }
+  #tip .t-row { margin-top:.5rem; color:#e4e8da; }
+  #tip .t-row b { color:var(--ml); font-weight:600; }
+  table { border-collapse:collapse; font-size:1.02rem; width:100%; max-width:980px; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:.5rem 1rem .5rem 0; border-bottom:2px solid var(--edge); }
+  td { padding:.55rem 1rem .55rem 0; border-bottom:1px solid #3a4840; }
+  td.num { font-family:var(--mono); color:var(--ml); }
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#161c18f2; border-top:2px solid var(--drop);
+           padding:1.1rem 7vw; font-size:1rem; color:#d3dccd; line-height:1.5; display:none; max-height:38vh; overflow:auto; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#5d6f62; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#5d6f62; font-size:.85rem; }
+  .namedrop { margin-top:1.8rem; font-size:1rem; color:var(--drop); font-family:var(--mono); }
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">Classical ML Fundamentals · From Google's Own Prep Guide</div>
+  <h1>Before the GPUs:<br>the <span style="text-decoration:underline wavy var(--drop)">chalkboard round</span>.</h1>
+  <p class="sub">Google's official prep table lists exactly this: supervised/unsupervised, <span class="nd" data-key="bias-variance">bias-variance</span>, <span class="nd" data-key="overfitting">overfitting</span>, <span class="nd" data-key="logreg">linear/logistic regression</span>, <span class="nd" data-key="trees">decision trees</span>, <span class="nd" data-key="svm">SVMs</span>, <span class="nd" data-key="cnn">CNNs</span>, <span class="nd" data-key="rnn">RNNs</span>. Fundamentals questions are where strong candidates get lazy — don't.</p>
+  <div class="namedrop">→ advance · N speaker notes · hover amber terms for name-drop cards</div>
+</section>
+<div class="notes">Why this deck exists: the recruiter guide tests fundamentals ("practical and theory"), and frontier-systems fluency doesn't substitute. The fundamentals round rewards crisp textbook definitions PLUS one modern twist per topic — each slide here ends with that twist.</div>
+
+<!-- 2 LEARNING PARADIGMS -->
+<section class="slide">
+  <div class="kicker">The Map</div>
+  <h2>Supervised, unsupervised — and the modern twist that blurred them.</h2>
+  <table>
+    <tr><th>Paradigm</th><th>Signal</th><th>Canonical examples</th></tr>
+    <tr><td class="num">Supervised</td><td>labeled pairs (x, y)</td><td>classification, regression</td></tr>
+    <tr><td class="num">Unsupervised</td><td>structure only</td><td>k-means clustering, PCA, density estimation</td></tr>
+    <tr><td class="num">Semi-supervised</td><td>few labels + many unlabeled</td><td>pseudo-labeling</td></tr>
+    <tr><td class="num">Self-supervised</td><td>labels manufactured from data</td><td><b>next-token prediction, contrastive (CLIP)</b></td></tr>
+    <tr><td class="num">Reinforcement</td><td>reward from interaction</td><td>RLHF, games, robotics</td></tr>
+  </table>
+  <p class="sub">The twist to volunteer: LLM pretraining is <span class="nd" data-key="supervised">self-supervised</span> — the data labels itself (predict the next word), which is how "unlabeled internet" became supervised-scale training signal.</p>
+</section>
+<div class="notes">Quick-fire definitions to have ready: k-means (alternate assign-to-nearest-centroid / recompute centroids; minimizes within-cluster variance; k chosen by elbow/silhouette), PCA (project onto top eigenvectors of the covariance matrix — directions of max variance). Both are 30-second answers that come up constantly as warm-ups.</div>
+
+<!-- 3 BIAS-VARIANCE -->
+<section class="slide">
+  <div class="kicker">The Central Tradeoff</div>
+  <div class="eq">E[error] = bias² + variance + irreducible noise</div>
+  <div class="cols" style="margin-top:1.4rem">
+    <div class="col card">
+      <h3>High bias (underfit)</h3>
+      <p>Model too simple for the truth. Symptom: <b>train AND validation error both high</b>. Fix: more capacity, better features, less regularization.</p>
+    </div>
+    <div class="col card">
+      <h3>High variance (overfit)</h3>
+      <p>Model fits the sampling noise. Symptom: <b>train error low, validation error high</b> — the gap is the tell. Fix: more data, regularization, simpler model, ensembling.</p>
+    </div>
+  </div>
+  <p class="sub">Always answer with the <b>diagnosis protocol</b> (learning curves, train/val gap), not just definitions. Modern twist: <span class="nd" data-key="bias-variance">double descent</span> — past the interpolation point, bigger deep nets can generalize <em>better</em> again. The U-curve is true but not the whole truth.</p>
+</section>
+<div class="notes">Double descent (Belkin et al. 2019; Nakkiran et al. for deep nets): test error falls, rises near the interpolation threshold (model just barely fits all training data), then falls AGAIN as overparameterization grows. One sentence of this marks you as current without needing the theory. Related modern vocab: scaling laws are in some sense the "bias side" story — more capacity + more data together.</div>
+
+<!-- 4 OVERFITTING -->
+<section class="slide">
+  <div class="kicker">The Regularization Toolkit</div>
+  <h2>Everything that fights overfitting, sorted by what it actually does.</h2>
+  <ul class="clean">
+    <li><b>L2 / weight decay</b> — shrinks all weights smoothly (Bayesian view: Gaussian prior)</li>
+    <li><b>L1</b> — drives weights to exactly zero → built-in feature selection (Laplace prior)</li>
+    <li><b>Dropout</b> — randomly zero activations in training; an implicit ensemble of subnetworks</li>
+    <li><b>Early stopping</b> — halt when validation error turns; implicit regularization for free</li>
+    <li><b>Data augmentation / more data</b> — attack variance at the source</li>
+    <li><b>Cross-validation</b> — not a fix, the <em>measurement instrument</em> (k-fold when data is small)</li>
+  </ul>
+  <p class="sub">The trap question: <span class="nd" data-key="overfitting">label leakage</span> — validation looks great because a feature secretly encodes the answer. Mention it unprompted; it's the sneakiest production bug in ML.</p>
+</section>
+<div class="notes">Why L1 gives sparsity and L2 doesn't: the L1 ball has corners on the axes — the loss contour tends to touch at a corner where some coordinates are exactly 0; the L2 ball is round, so weights shrink but rarely hit zero. A hand-drawn diamond-vs-circle sketch is the classic whiteboard answer. Leakage examples to have ready: timestamp-adjacent features, target-derived aggregates computed over the full dataset, train/test split AFTER feature scaling (fit the scaler on train only!).</div>
+
+<!-- 5 REGRESSION -->
+<section class="slide">
+  <div class="kicker">The Workhorses</div>
+  <h2>Linear and logistic regression: where every probe question starts.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3>Linear</h3>
+      <p>y = wᵀx + b, squared loss. Closed form (normal equation) or gradient descent at scale. Assumes linearity, independent errors; sensitive to outliers (that's the squared loss talking).</p>
+    </div>
+    <div class="col card">
+      <h3>Logistic</h3>
+      <p>p = σ(wᵀx), trained with <b>cross-entropy</b>. Convex → GD finds the global optimum. Outputs calibrated-ish probabilities; decision boundary is still linear. Softmax = its multiclass form = <b>the final layer of every neural classifier</b>.</p>
+    </div>
+  </div>
+  <p class="sub">The probe to expect: <em>"why cross-entropy instead of squared loss for classification?"</em> — squared loss + sigmoid is non-convex and its gradient vanishes exactly when the model is confidently wrong; cross-entropy's gradient is the clean <span class="nd" data-key="logreg">(p − y)·x</span>, large when wrong. </p>
+</section>
+<div class="notes">More probes from this slide: "interpret the weights" (log-odds per unit feature for logistic), "what if features are correlated?" (coefficients unstable — ridge helps), "classes imbalanced?" (class weights, threshold tuning, PR curves over ROC). Metrics vocabulary lives here too: precision/recall/F1, ROC-AUC vs PR-AUC (PR for rare positives) — have the one-liner for each.</div>
+
+<!-- 5b NN DESIGN PART 1 -->
+<section class="slide">
+  <div class="kicker">Build a Tiny Neural Net · Part 1</div>
+  <h2>Before any layers: the features decide most of the outcome.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3>1 · Split FIRST</h3>
+      <p>Train / validation / test, <b>split before any fitting</b> — including the scaler. Fit <code>StandardScaler</code> on train only, apply to val/test. Scaling leakage is the classic silent bug.</p>
+    </div>
+    <div class="col card">
+      <h3>2 · Engineer features</h3>
+      <p>Impute missing values (+ add a "was-missing" flag — missingness is signal). One-hot low-cardinality categoricals; <b>embeddings</b> for high-cardinality ones. Scale numerics — NNs <em>need</em> this (trees don't).</p>
+    </div>
+    <div class="col card">
+      <h3>3 · Smallest model that could work</h3>
+      <p><span class="ml" style="font-family:var(--mono)">Input → Dense(64, ReLU) → Dropout(0.2) → Dense(1, sigmoid)</span><br>Loss: binary cross-entropy (<span class="nd" data-key="logreg">slide 5's loss</span> — the last layer IS logistic regression). Optimizer: Adam, lr 1e-3.</p>
+    </div>
+  </div>
+  <p class="sub">Say the baseline sentence out loud: <em>"I'd run logistic regression first — the NN must beat it to earn its complexity."</em></p>
+</section>
+<div class="notes">Why NNs need scaling and trees don't: gradient descent shares one learning rate across weights, so wildly different feature scales warp the loss surface into a ravine (slow zig-zag convergence); trees only ask "is x > threshold?" — monotone transforms are invisible to them. Embeddings-vs-one-hot threshold: ~15-50 categories. The 'was-missing flag' trick: imputation erases the fact that data was missing, but missingness often correlates with the label (e.g., users who skip the income field).</div>
+
+<!-- 5c NN DESIGN PART 2 -->
+<section class="slide">
+  <div class="kicker">Build a Tiny Neural Net · Part 2</div>
+  <h2>Diagnose the fit first. Predict second.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3>Read the learning curves</h3>
+      <p>Plot train &amp; val loss per epoch — this is <span class="nd" data-key="bias-variance">slide 3</span> in motion:<br>
+      <b>both high &amp; flat</b> → underfit: more capacity, more epochs, check features<br>
+      <b>train ↓ val ↑ (diverging)</b> → overfit: dropout ↑, weight decay, early stopping, more data<br>
+      <b>val noisy/spiky</b> → lr too high or batch too small</p>
+    </div>
+    <div class="col card">
+      <h3>Then — and only then — predict</h3>
+      <p>Restore the <b>best-val-loss checkpoint</b> (early stopping did this for you). <code>model.predict</code> gives probabilities, not decisions: <b>pick the threshold from the use-case</b> (precision@k, cost matrix), check <b>calibration</b>, and evaluate once on the untouched test set — report PR-AUC if classes are imbalanced.</p>
+    </div>
+  </div>
+  <p class="sub">The order is the answer: <em>fit → diagnose → adjust → freeze → predict → evaluate once.</em> Touching the test set twice is the interview foul.</p>
+</section>
+<div class="notes">The diagnostic loop IS the bias-variance slide operationalized — say that connection out loud. Worked rhythm to narrate: "train 20 epochs, see val diverge at epoch 8 → add dropout 0.3 + early stopping patience 3 → curves now track → freeze at best checkpoint → threshold chosen at precision 0.8 because retention outreach costs $5/user → single test-set evaluation: PR-AUC 0.41 vs logistic baseline 0.35 — ship the NN." Thirty seconds, demonstrates the entire discipline. Keras/PyTorch detail on tap: model.fit(validation_data=...) + EarlyStopping(restore_best_weights=True) is the whole part-2 in two lines.</div>
+
+<!-- 6 TREES -->
+<section class="slide">
+  <div class="kicker">Trees & Ensembles</div>
+  <h2>Bagging cuts variance. Boosting cuts bias. That's the exam answer.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3>One tree</h3>
+      <p>Greedy splits maximizing purity gain (Gini / entropy). Interpretable, no scaling needed, handles mixed types — and overfits catastrophically if unpruned (high variance).</p>
+    </div>
+    <div class="col card">
+      <h3>Bagging → Random Forest</h3>
+      <p>Many deep trees on bootstrap samples (+ random feature subsets), <b>averaged</b>. Averaging independent-ish high-variance models slashes <b>variance</b>.</p>
+    </div>
+    <div class="col card">
+      <h3>Boosting → XGBoost</h3>
+      <p>Shallow trees added <b>sequentially, each fitting the previous ensemble's residuals</b>. Reduces <b>bias</b> step by step. The reigning king of tabular data.</p>
+    </div>
+  </div>
+  <p class="sub">The production fact worth stating plainly: <span class="nd" data-key="trees">gradient-boosted trees</span> still beat deep learning on most tabular problems. Knowing when <em>not</em> to use a neural net is senior signal.</p>
+</section>
+<div class="notes">Mapping ensembles onto bias-variance axes closes the loop with slide 3 — say it explicitly. Extra depth on tap: random forests' feature subsampling decorrelates the trees (otherwise all trees pick the same strong feature and averaging helps less); boosting's learning rate = shrinkage per tree; XGBoost adds second-order gradients + clever regularization. OOB (out-of-bag) error = free validation for bagging.</div>
+
+<!-- 7 SVM -->
+<section class="slide">
+  <div class="kicker">SVMs</div>
+  <h2>Maximize the margin; let the kernel do the feature engineering.</h2>
+  <ul class="clean">
+    <li><b>Max margin:</b> choose the hyperplane farthest from the nearest points — only those <b>support vectors</b> define the boundary; everything else could vanish without changing it</li>
+    <li><b>Soft margin (C):</b> tolerate violations; C trades margin width vs training accuracy — it's the bias-variance knob</li>
+    <li><b>Kernel trick:</b> the dual optimization touches data only via dot products x·x′ → swap in k(x, x′) and you've implicitly mapped to a huge feature space without computing it. RBF = infinite-dimensional</li>
+    <li><b>Why they faded:</b> ~O(n²) training; past ~10⁵ samples, GBDTs and nets win — but <span class="nd" data-key="svm">hinge loss</span> and margins live on in modern losses</li>
+  </ul>
+</section>
+<div class="notes">"Only support vectors matter" has a modern echo worth making: it's a sparsity-of-influence idea. The kernel trick's one-line essence: linear method + nonlinear feature map, paid for only through pairwise similarities. If asked to compare LR vs SVM: LR gives probabilities and scales; SVM gives margins and kernels; with few samples + many dims, SVMs historically shone (genomics-era lore).</div>
+
+<!-- 8 CNN/RNN -->
+<section class="slide">
+  <div class="kicker">Deep Learning (Per the Guide: CNNs &amp; RNNs)</div>
+  <h2>Architectures are inductive biases — say what each one assumes.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3><span class="nd" data-key="cnn">CNN</span>: "patterns are local &amp; repeat"</h3>
+      <p>Shared sliding filters → translation equivariance, few parameters (3×3 kernel = 9 weights, applied everywhere). Hierarchy: edges → textures → parts. Milestones: AlexNet 2012 (the detonator), ResNet (skip connections fix vanishing gradients).</p>
+    </div>
+    <div class="col card">
+      <h3><span class="nd" data-key="rnn">RNN</span>: "the past summarizes into a state"</h3>
+      <p>h_t = f(h_{t−1}, x_t). Backprop-through-time multiplies Jacobians → <b>vanishing/exploding gradients</b>; LSTMs fix it with additive gated cell states (same trick as ResNet skips!).</p>
+    </div>
+  </div>
+  <p class="sub">The segue that ties your whole ecosystem together: RNNs are <b>sequential</b> — O(n) unparallelizable steps. Attention removed the recurrence, which is why Transformers won the <span class="gpu">hardware lottery</span> (GPU deck, slide 1). Full circle.</p>
+</section>
+<div class="notes">If asked "CNN vs ViT": ViTs drop the locality bias and need ~100M+ images to compensate (or heavy augmentation/distillation) — inductive bias is a data-efficiency subsidy. If asked "would you ever use an RNN today?": streaming/low-latency regimes, tiny-device inference, and note Mamba/SSMs as recurrence reborn in parallelizable form — shows you track the pendulum. ResNet-LSTM parallel: both fight vanishing gradients with additive identity paths; drawing that connection is a favorite 'depth' moment.</div>
+
+<!-- 9 QUICK ANSWERS -->
+<section class="slide">
+  <div class="kicker">Rapid-Fire Kit</div>
+  <h2>When they ask "which model?" — the 10-second answers.</h2>
+  <table>
+    <tr><th>Situation</th><th>Reach for</th><th>One-line why</th></tr>
+    <tr><td>Tabular, mixed features</td><td class="num">XGBoost / LightGBM</td><td>still beats nets on tables</td></tr>
+    <tr><td>Need interpretability / regulated</td><td class="num">logistic regression, small tree</td><td>coefficients are the explanation</td></tr>
+    <tr><td>Tiny dataset</td><td class="num">linear + strong regularization</td><td>variance is the enemy</td></tr>
+    <tr><td>Images</td><td class="num">CNN (ViT if data is huge)</td><td>locality bias = data efficiency</td></tr>
+    <tr><td>Sequences/text today</td><td class="num">Transformer</td><td>parallel training, long range</td></tr>
+    <tr><td>No labels, want structure</td><td class="num">k-means / PCA</td><td>clusters and principal directions</td></tr>
+    <tr><td>Baseline, always</td><td class="num">simplest thing first</td><td>the Google-iest answer there is</td></tr>
+  </table>
+</section>
+<div class="notes">"Start with the simplest baseline and justify every step up in complexity" is practically a Googleyness answer — it demonstrates user-first pragmatism and measurement discipline. Pair every model choice with its eval: AUC/PR for classifiers, RMSE/MAE for regression, silhouette for clusters, and a holdout protocol stated out loud.</div>
+
+<!-- 10 CLOSE -->
+<section class="slide">
+  <div class="kicker">The One-Breath Answer</div>
+  <h1 style="font-size:1.9rem">"Error decomposes into bias plus variance — capacity trades one for the other, diagnosed by the train/validation gap and treated with the regularization toolkit; linear models are the convex, interpretable baseline, bagging averages variance away while boosting chips at bias, SVMs buy nonlinearity through kernels, and deep architectures are just inductive biases — convolution assumes locality, recurrence assumes summarizable pasts — until attention traded those assumptions for parallelism."</h1>
+  <p class="sub">Expand on demand: <span class="nd" data-key="bias-variance">bias-variance</span> · <span class="nd" data-key="overfitting">regularization</span> · <span class="nd" data-key="logreg">logistic</span> · <span class="nd" data-key="trees">ensembles</span> · <span class="nd" data-key="svm">kernels</span> · <span class="nd" data-key="cnn">CNN</span> · <span class="nd" data-key="rnn">RNN</span></p>
+</section>
+<div class="notes">This breath is longer than the systems decks' because fundamentals rounds are breadth rounds. Rehearse the probe answers specifically: why cross-entropy, why L1 sparsifies, bagging-vs-boosting on the bias/variance axes, why LSTMs (and ResNets) use additive paths, why transformers replaced RNNs. Those five probes cover ~80% of fundamentals follow-ups.</div>
+
+
+<!-- INTERACTIVE (v2) -->
+<section class="slide">
+  <div class="kicker">🎛 Interactive · Bias-Variance Explorer</div>
+  <h2>Capacity and data, fighting over two error bars.</h2>
+  <div class="aiml-widget" data-calc="biasvar">
+    <div class="sl-row"><label>model capacity</label><input type="range" data-k="c" min="1" max="100" step="1" value="15"><span class="sl-val" data-k="c"></span></div><div class="sl-row"><label>training data (k examples)</label><input type="range" data-k="dat" min="1" max="100" step="1" value="10"><span class="sl-val" data-k="dat"></span></div>
+    
+    <div class="wout"></div>
+  </div>
+  <p class="sub">Low capacity: both bars high (bias). High capacity, little data: the gap explodes (variance). Then slide the data up and watch the gap close — 'more data fixes variance' as a physical sensation.</p>
+</section>
+<div class="notes">This widget is slide 3 made kinetic and the learning-curve slide's intuition pump. Script: capacity 5 (underfit) → 80 (overfit at 10k examples, gap ~25 pts) → data to 100k (gap collapses, same capacity now fine). Three moves, whole tradeoff.</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">← → navigate · N notes · F fullscreen · hover amber = name-drop cards</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+let i=0;
+function show(n){ i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')show(i+1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+  else if(e.key.toLowerCase()==='n')document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.();
+});
+show(0);
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div>
+      <div class="t-row"><b>Why it matters:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect();
+    let x=r.left, y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20) x=innerWidth-tw-20;
+    if(y+th>innerHeight-20) y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

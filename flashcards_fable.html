@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fable Addendum · 20 Practitioner Flashcards</title>
+<style>
+  :root { --bg:#faf6ef; --panel:#fffdf8; --edge:#e0d6c2; --ink:#211f28; --dim:#746e62;
+    --go:#1a7f37; --learn:#b45309; --stop:#be123c; --iykyk:#6d28d9; --mono:"Cascadia Code","Consolas",monospace; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,sans-serif;padding:4.6rem 4vw 4rem;
+       background-image:radial-gradient(#dcd0b880 1px,transparent 1.3px);background-size:3.8vmin 3.8vmin;}
+  h1{font-family:Georgia,serif;font-size:2.1rem;}
+  .lead{color:var(--dim);margin:.4rem 0 1.4rem;max-width:88ch;line-height:1.55;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:1rem;}
+  .fcard{background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:1rem 1.2rem;
+         box-shadow:2px 3px 0 #0001;break-inside:avoid;}
+  .fcard h3{font-family:Georgia,serif;font-size:1.05rem;margin-bottom:.45rem;}
+  .fcard h3 .no{font-family:var(--mono);color:#b45309;margin-right:.45rem;}
+  .fcard h3 .stock{font-size:.68rem;font-weight:600;letter-spacing:.1em;color:#fff;border-radius:999px;
+                   padding:.1rem .55rem;margin-left:.5rem;vertical-align:2px;}
+  .row{font-size:.87rem;line-height:1.5;margin:.4rem 0;}
+  .row b.tag{font-size:.72rem;letter-spacing:.08em;}
+  .row b.m{color:var(--ink);} .row b.g{color:var(--go);} .row b.s{color:var(--stop);} .row b.i{color:var(--iykyk);}
+  .eq{font-family:var(--mono);background:#f3ecdd;border-radius:6px;padding:.25rem .55rem;display:inline-block;
+      margin:.15rem 0;font-size:.84rem;}
+  .xref{font-size:.74rem;color:var(--dim);font-family:var(--mono);margin-top:.4rem;}
+  .white{background:#8a8375;} .yellow{background:#b48a0a;} .blue{background:#1d6fd1;} .green{background:#1a7f37;}
+  .pink{background:#d4467c;} .orange{background:#d97706;}
+</style>
+</head>
+<body>
+<h1>🃏 Fable Addendum · 20 Practitioner Cards</h1>
+<p class="lead">Companion to your 157-card Field Guide (same format: Meaning · Notation · GO · STOP), plus one new field the original doesn't have: <b style="color:var(--iykyk)">🤫 IYKYK</b> — the in-the-wild wisdom that separates "studied it" from "shipped it." Numbered F01–F20, cross-referenced to the original cards (e.g., <span style="font-family:var(--mono)">→017</span>). Stock colors match your system. Print, cut, star.</p>
+<div class="grid">
+
+<div class="fcard"><h3><span class="no">F01 ⋆</span>Great offline, bad in the wild<span class="stock white">WHITE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> The debugging ladder when validation says yes but production says no. Walk it IN ORDER — each rung is cheaper to check than the next: ① leakage audit ② split shape vs deployment ③ training/serving skew ④ distribution shift ⑤ feedback loops ⑥ calibration/prevalence mismatch.</div>
+<div class="row"><b class="tag m">NOTATION ·</b> <span class="eq">L̂val ≪ R(θ) under P_deploy</span> — the gap between your estimate and the true deployment risk is the whole story.</div>
+<div class="row"><b class="g tag">GO ·</b> Rung ② is where cross-validation gets interrogated: if your CV is random folds but deployment predicts the <em>future</em> or <em>new users</em>, the CV estimate was answering a different question than the one production asked.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> When CV score ≫ prod score, suspect the folds before the model: duplicate/near-duplicate rows straddling folds, same user in train and val, time travel. The model is usually innocent; the evaluation lied.</div>
+<div class="xref">→007, 008, 009, 017, 040</div></div>
+
+<div class="fcard"><h3><span class="no">F02 ⋆</span>Temporal &amp; grouped cross-validation<span class="stock white">WHITE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> Match fold geometry to deployment geometry. Predicting forward in time → rolling-origin splits (train on past, validate on the next window). Entities that recur → GroupKFold so a user/document/patient never straddles folds.</div>
+<div class="row"><b class="tag m">NOTATION ·</b> <span class="eq">train: t ≤ T₀ · val: T₀ &lt; t ≤ T₁</span> — rolled forward k times.</div>
+<div class="row"><b class="s tag">STOP ·</b> Shuffling time-series data for CV is leakage with a respectable name.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> Preprocessing must live INSIDE each fold (sklearn <span class="eq">Pipeline</span> inside <span class="eq">cross_val_score</span>). A scaler fit on the full dataset before splitting quietly peeked at the validation folds — the single most common leak in real notebooks.</div>
+<div class="xref">→008, 017</div></div>
+
+<div class="fcard"><h3><span class="no">F03</span>Training/serving skew<span class="stock white">WHITE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> One feature, two implementations: computed by batch SQL for training, by a streaming service for serving. Subtle differences (window edges, timezone, null handling) silently degrade the live model while every offline metric stays green.</div>
+<div class="row"><b class="g tag">GO ·</b> One feature definition, two serving paths — that's the feature store's entire reason to exist.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> The pro diagnostic: log raw serving-time inputs, replay them through the training pipeline, and diff the feature values. Any nonzero diff is a bug you can now point at.</div>
+<div class="xref">→005, 017 · your 🧰 Infra deck, slide 7</div></div>
+
+<div class="fcard"><h3><span class="no">F04</span>Baseline-first discipline<span class="stock white">WHITE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> Before any neural net: ① predict the majority class / mean (the floor) ② logistic or linear regression ③ gradient-boosted trees. Each step must EARN its complexity over the last.</div>
+<div class="row"><b class="g tag">GO ·</b> "I'd start with logistic regression" is the most Google-sounding sentence available in applied-ML interviews.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> A baseline is also an <em>instrument</em>: if logistic ≈ your deep model, the features are the ceiling, not the architecture — go do feature work. If the majority-class baseline is already at 94%, your problem statement (or metric) needs renegotiating before any modeling.</div>
+<div class="xref">→014, 020, 028, 029</div></div>
+
+<div class="fcard"><h3><span class="no">F05</span>PR-AUC vs ROC-AUC under imbalance<span class="stock white">WHITE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> ROC's x-axis (FPR = FP/(FP+TN)) has the huge negative class in its denominator — so at 1% prevalence, oceans of false positives barely move it. Precision has <em>predicted positives</em> in the denominator and feels every one.</div>
+<div class="row"><b class="tag m">NOTATION ·</b> <span class="eq">random PR-AUC ≈ prevalence</span>, not 0.5 — a 0.3 PR-AUC at 1% prevalence is a 30× lift.</div>
+<div class="row"><b class="s tag">STOP ·</b> An impressive ROC-AUC on a rare-positive problem is the classic way to accidentally oversell a model.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> Always report prevalence next to any AUC. Reviewers who ask "what's the base rate?" are doing exactly this check on you.</div>
+<div class="xref">→018, 025, 026</div></div>
+
+<div class="fcard"><h3><span class="no">F06</span>Threshold economics<span class="stock white">WHITE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> 0.5 is a default, not a decision. The threshold comes from the cost matrix or the capacity constraint: minimize expected cost, or take top-k where k = how many cases the fraud/retention team can actually work.</div>
+<div class="row"><b class="tag m">NOTATION ·</b> <span class="eq">τ* = argmin_τ E[cost] = c_FP·FP(τ) + c_FN·FN(τ)</span></div>
+<div class="row"><b class="g tag">GO ·</b> Changing τ re-aims a trained model for free — say this before anyone suggests retraining.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> When the constraint is team capacity, there is no threshold at all — it's a daily top-k, and your real metric is precision@k. Interviewers light up when a candidate converts a threshold question into a capacity question unprompted.</div>
+<div class="xref">→024, 021, 153</div></div>
+
+<div class="fcard"><h3><span class="no">F07</span>Calibration in the wild<span class="stock white">WHITE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> A model is calibrated when "0.8" means 80%. Check with a reliability diagram (bin predictions, plot observed frequency); repair with Platt scaling (sigmoid fit) or isotonic regression on a held-out set.</div>
+<div class="row"><b class="s tag">STOP ·</b> Class weighting and resampling (card 018's remedies!) silently DESTROY calibration — the model now lives in a world with fake prevalence.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> The order of operations pros use: train with weights if you must → recalibrate on untouched data at true prevalence → THEN pick the threshold. Skipping the middle step is why "the probabilities look weird" tickets exist.</div>
+<div class="xref">→018, 027</div></div>
+
+<div class="fcard"><h3><span class="no">F08</span>Is the improvement real?<span class="stock white">WHITE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> Deep-learning runs are stochastic (init, shuffling, dropout, GPU nondeterminism). A single-run +0.5% is weather, not climate. Rerun with ≥3 seeds; report mean ± std; compare on the SAME folds (paired, not pooled).</div>
+<div class="row"><b class="tag m">NOTATION ·</b> <span class="eq">Δ = mean(A−B over paired folds)</span> — pairing removes fold difficulty as noise.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> A +0.3% that survives five seeds beats a +1% that doesn't survive two. Teams that don't seed-sweep spend quarters chasing improvements that were never there.</div>
+<div class="xref">→008, 013</div></div>
+
+<div class="fcard"><h3><span class="no">F09</span>Drift monitoring &amp; late labels<span class="stock white">WHITE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> Ground truth often arrives weeks late (fraud confirmations, churn windows). Until it does, monitor what you CAN see: input feature distributions (PSI/KL vs training), prediction distribution, and calibration drift.</div>
+<div class="row"><b class="tag m">NOTATION ·</b> <span class="eq">PSI = Σ (pᵢ−qᵢ)·ln(pᵢ/qᵢ)</span> — rule of thumb: &gt;0.2 = investigate.</div>
+<div class="row"><b class="s tag">STOP ·</b> Data drift (inputs moved) ≠ concept drift (the input→label relationship moved). Input monitoring is blind to the second.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> "Deploy is the midpoint, not the finish line — who notices when the model goes quietly wrong?" is a design-interview sentence that does a lot of lifting.</div>
+<div class="xref">→040 · 🧰 Infra deck, slide 8</div></div>
+
+<div class="fcard"><h3><span class="no">F10</span>Feedback loops<span class="stock white">WHITE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> Your model's decisions shape tomorrow's training data: the recommender only shows what it already likes; the fraud model only gets labels for cases it flagged. Retraining then amplifies yesterday's beliefs.</div>
+<div class="row"><b class="g tag">GO ·</b> Log the treatment (who got flagged/recommended, with what propensity) alongside the outcome — future-you needs it to de-bias.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> Keep a small randomized holdout slice that never gets the model's intervention — it's simultaneously your unbiased label source AND your ongoing A/B control. Cheap insurance almost nobody buys until burned.</div>
+<div class="xref">→040, 151</div></div>
+
+<div class="fcard"><h3><span class="no">F11</span>Slice-based evaluation<span class="stock white">WHITE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> Aggregate metrics average away your worst failures. Evaluate per segment — tenure, geography, device, class, input length — and gate deployment on "no slice regresses," not just "average improves."</div>
+<div class="row"><b class="s tag">STOP ·</b> A model better on average and worse for one user segment is a launch blocker at Google, full stop (fairness + long tail).</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> The slices that bite are the ones correlated with data volume: your model is worst exactly where you had least data, which is often exactly the market you're trying to grow into.</div>
+<div class="xref">→020, 143</div></div>
+
+<div class="fcard"><h3><span class="no">F12</span>The prediction-time interrogation<span class="stock white">WHITE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> Card 017's question — "could I know this at the exact moment of prediction?" — asked like a prosecutor. The sneaky guilty parties: aggregates computed over the FULL dataset (including the future), fields edited after the outcome, join keys that only exist post-hoc, "days since last activity" computed at label time.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> The tell in the wild: one feature with suspiciously huge importance. Feature-importance plots are leakage detectors first and interpretability tools second. If AUC ≈ 0.99 on a human-hard problem, you didn't win — you leaked.</div>
+<div class="xref">→017, 005</div></div>
+
+<div class="fcard"><h3><span class="no">F13</span>Error analysis by hand<span class="stock white">WHITE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> Before touching the architecture: pull 50 misclassified examples, read them, tag each with a failure reason (label wrong / ambiguous / feature missing / genuinely hard / preprocessing bug). The tag histogram IS your roadmap.</div>
+<div class="row"><b class="g tag">GO ·</b> If 20 of 50 errors are label noise, the winning move is relabeling, not a bigger model — data-centric beats model-centric embarrassingly often.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> Andrew Ng made "look at your errors" a movement, but the quiet part: do it BEFORE the first model too (read 50 raw examples) — half of all pipeline bugs are visible to the naked eye.</div>
+<div class="xref">→013, 014</div></div>
+
+<div class="fcard"><h3><span class="no">F14 ⋆</span>Read the constraints first<span class="stock yellow">YELLOW</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> The constraints whisper the intended solution: n ≤ 20 → bitmask/brute force (2ⁿ fine) · n ≤ ~1000 → O(n²) DP fine · n ≤ 10⁵ → need O(n log n) · budget/amount small → pseudo-polynomial DP · values up to 10¹⁸ → think math, not iteration.</div>
+<div class="row"><b class="g tag">GO ·</b> Say it aloud: "n is 10⁵, so I'm looking for n log n or better — that suggests sorting, heaps, or binary search."</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> This works in reverse for NP-hard recognition: if the clean formulations are all exponential and n ≤ 20, the SETTER chose 20 because they expect the 2ⁿ solution. The constraint is the permission slip.</div>
+<div class="xref">→076, 094, 095</div></div>
+
+<div class="fcard"><h3><span class="no">F15 ⋆</span>Amortized O(1) in the wild<span class="stock yellow">YELLOW</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> Python's <span class="eq">list.append</span> is amortized O(1): it over-allocates and doubles, so occasional O(n) copies average out. Dict/set inserts: same story via resize. That's card 078's "amortized" made concrete.</div>
+<div class="row"><b class="tag m">NOTATION ·</b> <span class="eq">Σ cost of n appends = O(n)</span> even though one append can cost O(n).</div>
+<div class="row"><b class="s tag">STOP ·</b> heapify is O(n), but n heappushes are O(n log n) — building a heap the "obvious" way forfeits the discount.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> <span class="eq">list.pop(0)</span> is O(n) and <span class="eq">"string" += </span> in a loop is O(n²) — the two Python performance bugs interviewers can spot from across the room. deque and "".join are the fixes.</div>
+<div class="xref">→078, 111, 118, 121, 123</div></div>
+
+<div class="fcard"><h3><span class="no">F16 ⋆</span>Top-k decision ladder<span class="stock green">GREEN</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> Need the k best of n? Full sort O(n log n) when you need ALL in order · heap O(n log k) when k ≪ n or data streams · quickselect O(n) average when you need the k-th (unordered) in memory.</div>
+<div class="row"><b class="g tag">GO ·</b> "k is small and the data streams, so a size-k min-heap" — picking BY REGIME is the senior move, same instinct as your serving-engine table.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> <span class="eq">heapq.nlargest(k, it)</span> already implements the ladder's heap rung — and for k=1 it quietly degrades to max(). Using stdlib then stating the complexity beats hand-rolling it slightly wrong.</div>
+<div class="xref">→119, 120, 082</div></div>
+
+<div class="fcard"><h3><span class="no">F17 ⋆</span>Monotonic stack<span class="stock green">GREEN</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> A stack you keep sorted by popping everything your new element beats. Solves the whole "nearest greater/smaller to the left/right" family in O(n): next greater element, daily temperatures, largest rectangle in histogram, trapping rain water.</div>
+<div class="row"><b class="tag m">NOTATION ·</b> <span class="eq">while stack and a[stack[-1]] &lt; a[i]: resolve(stack.pop())</span> — each index pushed and popped at most once ⇒ O(n).</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> The trigger phrases: "next greater/smaller," "span until a bigger one," "visible from the right." Hear any of them → monotonic stack, and say the push-once-pop-once argument for O(n) out loud — it's the part that impresses.</div>
+<div class="xref">→113, 078</div></div>
+
+<div class="fcard"><h3><span class="no">F18</span>Two pointers &amp; sliding window<span class="stock green">GREEN</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> Sorted array + pair/sum condition → two pointers from the ends, O(n). Contiguous subarray + "longest/shortest/count with property" → sliding window: grow right, shrink left while invalid, O(n).</div>
+<div class="row"><b class="s tag">STOP ·</b> Sliding window needs monotone feasibility (growing the window can't FIX a violation) — with negatives in a sum problem, that breaks, and you're back to prefix sums + hashmap.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> The window-invariant sentence to narrate: "the window is always the largest valid window ending at right." State it, and your while-loop writes itself — and reviewers hear a loop invariant, which is card 074 energy.</div>
+<div class="xref">→074, 086, 121</div></div>
+
+<div class="fcard"><h3><span class="no">F19</span>Embedding-space sanity checks<span class="stock orange">ORANGE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> Before trusting any system built on embeddings (retrieval, RecSys, RAG), interrogate the space itself: nearest neighbors of known items should be sensible; distances should separate obvious pairs; a 2-D projection (UMAP/t-SNE) should show structure, not soup.</div>
+<div class="row"><b class="g tag">GO ·</b> Ten manual nearest-neighbor queries catch more embedding bugs than any aggregate metric — wrong pooling, unnormalized vectors, truncated text all show up instantly.</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> Cosine vs dot product is a real decision: normalized embeddings make them equivalent; unnormalized dot product smuggles in popularity (longer vectors win) — sometimes you WANT that (RecSys), sometimes it's a bug (semantic search). Know which one your index uses.</div>
+<div class="xref">→145, 150, 151 · 🎯 RecSys deck</div></div>
+
+<div class="fcard"><h3><span class="no">F20</span>Offline ↔ online metric mapping<span class="stock orange">ORANGE</span></h3>
+<div class="row"><b class="tag m">MEANING ·</b> Each stage gets its own offline metric (retrieval → recall@k; ranking → NDCG/MRR; classifier → PR-AUC), but the business decides on online metrics (CTR, conversion, retention) via A/B test. Offline gates candidates; online crowns them.</div>
+<div class="row"><b class="s tag">STOP ·</b> Offline lifts routinely evaporate online: position bias, feedback loops, and distribution shift between logged data and live traffic (cards F10 + 040 conspiring).</div>
+<div class="row"><b class="i tag">🤫 IYKYK ·</b> "We'd validate with an A/B before trusting the offline lift" is the closing sentence of every strong applied-ML answer. For ranking changes specifically, name interleaving — more sensitive than A/B at the same traffic, and a true insider word.</div>
+<div class="xref">→153, 154 · F05, F10</div></div>
+
+</div>
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+</body>
+</html>

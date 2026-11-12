@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Frameworks &amp; ML Infrastructure: The Toolbox Round</title>
+<style>
+  :root {
+    /* Identity: warm sand "workshop" */
+    --bg: #f5efe3; --panel: #fffdf7; --edge: #e0d5bf;
+    --ink: #2a2118; --dim: #7d7260;
+    --wk: #8d4004;              /* topic accent: burnt sienna */
+    --gpu: #5a8f00;             /* shared: compute/GPU = green (dark for light bg) */
+    --host: #1d6fd1;            /* shared: CPU/host/comm = blue (dark for light bg) */
+    --drop: #9a6700;            /* shared: name-drops = amber (dark for light bg) */
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); font-family:"Segoe UI", system-ui, sans-serif; overflow:hidden;
+         background-image: linear-gradient(rgba(141,64,4,.07) 1px, transparent 1px),
+                           linear-gradient(90deg, rgba(141,64,4,.07) 1px, transparent 1px);
+         background-size: 4vmin 4vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:6vh 7vw; flex-direction:column; justify-content:center; }
+  .slide.active { display:flex; }
+  .kicker { color:var(--wk); font-size:1rem; letter-spacing:.3em; text-transform:uppercase; margin-bottom:1.3rem; font-weight:700; }
+  h1 { font-size:3rem; line-height:1.18; max-width:32ch; font-weight:800; }
+  h2 { font-size:2.15rem; line-height:1.28; margin-bottom:1.8rem; max-width:40ch; font-weight:800; }
+  .sub { color:var(--dim); font-size:1.18rem; margin-top:1.3rem; max-width:66ch; line-height:1.55; }
+  .cols { display:flex; gap:1.8rem; align-items:stretch; }
+  .col { flex:1; }
+  .card { background:var(--panel); border-radius:14px; padding:1.4rem 1.6rem; border:1px solid var(--edge); box-shadow:0 2px 8px #00000010; }
+  .card h3 { font-size:1.14rem; margin-bottom:.55rem; color:var(--wk); }
+  .card p { color:var(--dim); font-size:.99rem; line-height:1.5; }
+  .wk { color:var(--wk); } .gpu { color:var(--gpu); } .host { color:var(--host); }
+  ul.clean { list-style:none; font-size:1.18rem; line-height:1.95; max-width:76ch; }
+  ul.clean li::before { content:"▸ "; color:var(--wk); }
+  .nd { color:var(--drop); border-bottom:1px dashed var(--drop); cursor:help; font-family:var(--mono); font-size:.95em; }
+  #tip { position:fixed; z-index:50; max-width:470px; background:#fffef9; border:1.5px solid var(--drop);
+         border-radius:12px; padding:1rem 1.2rem; font-size:.92rem; line-height:1.5; display:none; box-shadow:0 12px 40px #00000030; }
+  #tip .t-name { color:var(--drop); font-weight:700; font-size:1.05rem; }
+  #tip .t-cat { color:var(--dim); font-size:.78rem; text-transform:uppercase; letter-spacing:.15em; margin-left:.6rem; }
+  #tip .t-row { margin-top:.5rem; color:#4a4131; }
+  #tip .t-row b { color:var(--wk); font-weight:600; }
+  table { border-collapse:collapse; font-size:1.02rem; width:100%; max-width:980px; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:.5rem 1rem .5rem 0; border-bottom:2px solid var(--edge); }
+  td { padding:.55rem 1rem .55rem 0; border-bottom:1px solid #ece4d2; }
+  td.num { font-family:var(--mono); color:var(--wk); }
+  .flow { display:flex; gap:.7rem; align-items:center; flex-wrap:wrap; margin-top:.6rem; }
+  .fnode { background:var(--panel); border:1px solid var(--edge); border-radius:10px; padding:.8rem 1.1rem; text-align:center; }
+  .fnode b { display:block; font-size:1rem; color:var(--wk); } .fnode span { color:var(--dim); font-size:.82rem; }
+  .arr { color:var(--wk); font-size:1.5rem; }
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#2e2316f5; border-top:2px solid var(--wk);
+           padding:1.1rem 7vw; font-size:1rem; color:#ead9c0; line-height:1.5; display:none; max-height:38vh; overflow:auto; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#b5a88e; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#b5a88e; font-size:.85rem; }
+  .namedrop { margin-top:1.8rem; font-size:1rem; color:var(--drop); font-family:var(--mono); }
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">Frameworks &amp; ML Infrastructure · Track D Toolbox</div>
+  <h1>Tools are easy to name.<br><span class="wk">Choosing between them</span> is the interview.</h1>
+  <p class="sub">The Track D stack from Google's guide — <span class="nd" data-key="pytorch">PyTorch</span> / <span class="nd" data-key="jax">JAX</span> / <span class="nd" data-key="tensorflow">TensorFlow</span>, <span class="nd" data-key="ray">Ray</span>, both <span class="nd" data-key="triton-server">Tritons</span>, <span class="nd" data-key="kubeflow">Kubeflow</span>, <span class="nd" data-key="vector-db">vector DBs</span> — organized as decision rules, not a product catalog.</p>
+  <div class="namedrop">→ advance · N speaker notes · hover amber terms for name-drop cards</div>
+</section>
+<div class="notes">The meta-skill this deck trains: every tool answer should be "regime → tool → because", never a brand preference. Google interviewers are allergic to tribalism and fond of judgment.</div>
+
+<!-- 2 FRAMEWORKS -->
+<section class="slide">
+  <div class="kicker">The Big Three</div>
+  <h2>Imperative, functional, or legacy-production: pick by regime.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3><span class="nd" data-key="pytorch">PyTorch</span></h3>
+      <p><b>Eager define-by-run</b> autograd; torch.compile bolts a compiler on after the fact. The research default and ecosystem king. Distributed = DDP/FSDP over <span class="gpu">NCCL</span>.</p>
+    </div>
+    <div class="col card">
+      <h3><span class="nd" data-key="jax">JAX</span> <span style="font-size:.8em; color:var(--dim)">(the Google one)</span></h3>
+      <p><b>Pure functions + composable transforms</b>: grad · jit · vmap · shard_map. Compiles through <span class="nd" data-key="xla">XLA</span>; sharding by <span class="nd" data-key="gspmd">GSPMD</span> annotation. How TPUs are programmed; how Gemini was trained.</p>
+    </div>
+    <div class="col card">
+      <h3><span class="nd" data-key="tensorflow">TensorFlow</span></h3>
+      <p><b>Graph-first heritage</b>, now eager + tf.function. Fading in research, entrenched in production estates — TF Serving, TFLite (edge), TFX (Google's pipeline lineage).</p>
+    </div>
+  </div>
+  <p class="sub">The judgment sentence: <em>"PyTorch for ecosystem, JAX for Google-stack and TPUs, TF where it's already deployed."</em></p>
+</section>
+<div class="notes">JAX depth for a Google room: functional purity is WHY the transforms compose — jit(vmap(grad(f))) works because f has no hidden state; PRNG keys are explicit for the same reason. The trade: in-place mutation and dynamic shapes are awkward (recompilation on shape change). PyTorch's counter-evolution: torch.compile/Dynamo captures graphs from eager code — both frameworks converged on 'trace Python → compile with a backend' from opposite ends.</div>
+
+<!-- 3 COMPILE STACKS -->
+<section class="slide">
+  <div class="kicker">What Happens Under .compile()</div>
+  <h2>Two stacks, same destination: fused kernels on the accelerator.</h2>
+  <div class="flow">
+    <div class="fnode"><b>PyTorch</b><span>eager code</span></div><div class="arr">→</div>
+    <div class="fnode"><b>Dynamo</b><span>graph capture</span></div><div class="arr">→</div>
+    <div class="fnode"><b>Inductor</b><span>fusion, codegen</span></div><div class="arr">→</div>
+    <div class="fnode"><b><span class="nd" data-key="triton">Triton</span> kernels</b><span>GPU</span></div>
+  </div>
+  <div class="flow" style="margin-top:1rem">
+    <div class="fnode"><b>JAX</b><span>pure fn + jit</span></div><div class="arr">→</div>
+    <div class="fnode"><b>jaxpr</b><span>traced IR</span></div><div class="arr">→</div>
+    <div class="fnode"><b><span class="nd" data-key="xla">XLA</span></b><span>fusion, layout, SPMD</span></div><div class="arr">→</div>
+    <div class="fnode"><b>TPU / GPU</b><span>via Pallas for custom kernels</span></div>
+  </div>
+  <p class="sub">Both chains exist for the same roofline reason: <span class="nd" data-key="kernel-fusion">fusion</span> keeps intermediates out of <span class="nd" data-key="hbm">HBM</span>, and fewer launches beat overhead. The compiler is doing by machine what kernel engineers do by hand.</p>
+</section>
+<div class="notes">Interview bridge: this slide connects Track D tooling back to the GPU deck's memory-bound story — being able to say WHY compilers fuse (memory traffic + launch overhead, not FLOPs) turns a tooling answer into a systems answer. Trivia on tap: Inductor emits OpenAI Triton kernels for GPU; Pallas is JAX's Triton-equivalent that also targets TPUs.</div>
+
+<!-- 4 TWO TRITONS -->
+<section class="slide">
+  <div class="kicker">The Disambiguation Trap</div>
+  <h2>There are two Tritons. Asking "which one?" is a free senior point.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3><span class="nd" data-key="triton">OpenAI Triton</span> — the compiler</h3>
+      <p>Python DSL for writing <b>GPU kernels</b> at the tile level. Lives at the bottom of the stack: it's what torch.compile generates. You use it to make one op fast.</p>
+    </div>
+    <div class="col card">
+      <h3><span class="nd" data-key="triton-server">NVIDIA Triton</span> — the server</h3>
+      <p>Multi-framework <b>inference server</b>: TensorRT/PyTorch/ONNX backends behind one gRPC endpoint, dynamic batching, model ensembles. Lives at the top of the stack: it's how models meet traffic. (TRT-LLM often runs <em>as</em> a Triton backend.)</p>
+    </div>
+  </div>
+  <p class="sub">One writes kernels; one serves models. They share nothing but the name — and conflating them is a known candidate screener.</p>
+</section>
+<div class="notes">If the interviewer says just "Triton," respond: "the kernel language or the inference server?" — instant signal you've touched both layers. Placement of Triton Server vs vLLM: Triton Server is the general-purpose answer (CNNs, rankers, ensembles, mixed fleets); vLLM/SGLang/TRT-LLM are LLM-specialized engines — and in practice TRT-LLM deploys behind Triton Server at NVIDIA shops.</div>
+
+<!-- 5 RAY -->
+<section class="slide">
+  <div class="kicker">Distributed Python</div>
+  <h2>Ray: tasks for stateless work, actors for stateful — everything else is a library on top.</h2>
+  <ul class="clean">
+    <li><b>@ray.remote on a function → task</b> (stateless, scheduled anywhere); <b>on a class → actor</b> (stateful, pinned process — a parameter server, a simulator, an engine)</li>
+    <li>Object store with <b>zero-copy shared memory</b> per node — large arrays pass by reference, not pickle</li>
+    <li>The library stack: <b>Ray Train</b> (distributed training), <b>Tune</b> (HPO at scale), <b>Data</b> (streaming ingest), <b><span class="nd" data-key="ray-serve">Serve</span></b> (model composition), RLlib</li>
+    <li>Who leans on it: OpenAI (training orchestration), vLLM (multi-node serving), Anyscale (the company)</li>
+  </ul>
+  <p class="sub">The regime sentence: <em>"<span class="nd" data-key="ray">Ray</span> when I need to scale arbitrary Python; Spark when it's really ETL; Kubernetes alone when the units are services, not computations."</em></p>
+</section>
+<div class="notes">Tasks-vs-actors is the one mechanism to explain crisply if probed — it's just 'pure function vs object with state' distributed. Honest limitation to volunteer: Ray adds a scheduling/serialization layer — for a single-node job or a simple batch script, it's overhead without benefit. The 'don't reach for infrastructure you don't need' instinct from the RecSys deck applies verbatim.</div>
+
+<!-- 6 PIPELINES -->
+<section class="slide">
+  <div class="kicker">Orchestration</div>
+  <h2>The training pipeline is a DAG — recite it like a phone number.</h2>
+  <div class="flow">
+    <div class="fnode"><b>Validate data</b><span>schema, drift vs train stats</span></div><div class="arr">→</div>
+    <div class="fnode"><b>Transform</b><span>features, consistent offline/online</span></div><div class="arr">→</div>
+    <div class="fnode"><b>Train</b><span>containerized, tracked</span></div><div class="arr">→</div>
+    <div class="fnode"><b>Evaluate</b><span>vs baseline + slices</span></div><div class="arr">→</div>
+    <div class="fnode"><b>Gate</b><span>auto-block regressions</span></div><div class="arr">→</div>
+    <div class="fnode"><b>Register</b><span>versioned artifact</span></div><div class="arr">→</div>
+    <div class="fnode"><b>Deploy</b><span>canary → full</span></div>
+  </div>
+  <p class="sub"><span class="nd" data-key="kubeflow">Kubeflow Pipelines</span> runs this as containers on Kubernetes; <b>Vertex AI Pipelines</b> is Google's managed flavor (the name to drop); TFX is the Google-internal ancestor; Airflow orchestrates anything but knows nothing about ML.</p>
+</section>
+<div class="notes">The evaluation gate is the step candidates forget — automatic blocking on regression (overall AND per-slice: new model better on average but worse for a user segment = don't ship). Slice-based eval is a very Google concern (fairness + long-tail users). Also say 'every step containerized and versioned → any model traceable back to exact data + code' — that's lineage, and it's the point of the whole apparatus.</div>
+
+<!-- 7 DATA LAYER -->
+<section class="slide">
+  <div class="kicker">The Data Layer</div>
+  <h2>Vector DBs and feature stores: don't deploy infrastructure you don't need.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3><span class="nd" data-key="vector-db">Vector databases</span></h3>
+      <p>ANN (HNSW/IVF/ScaNN) + metadata filters + CRUD + replication. Ladder of commitment: <b>pgvector</b> (vectors in your existing Postgres) → <b>Qdrant/Milvus</b> (dedicated OSS) → <b>Pinecone / Vertex AI Vector Search</b> (managed; Vertex is ScaNN-backed — the Google name).</p>
+    </div>
+    <div class="col card">
+      <h3>Feature stores</h3>
+      <p>One feature definition served two ways: batch (training) and low-latency (serving). Exists to kill <b>training/serving skew</b> — the bug where offline and online compute the "same" feature differently. Feast (OSS), Vertex AI Feature Store (managed).</p>
+    </div>
+  </div>
+</section>
+<div class="notes">The pgvector-first argument: if you already run Postgres and have <10M vectors, adding a service (new infra, new failure mode, data sync) to avoid an extension is negative engineering. Training/serving skew example to have ready: 'user's 7-day click count' computed by a batch SQL job for training but by a streaming counter online — subtly different windows → silent accuracy loss. The feature store's whole job is making that impossible.</div>
+
+<!-- 8 MLOPS -->
+<section class="slide">
+  <div class="kicker">Keeping Models Alive</div>
+  <h2>Models degrade silently: the world drifts, the model doesn't.</h2>
+  <ul class="clean">
+    <li><b>Experiment tracking</b> — MLflow / Weights &amp; Biases: every run's config, metrics, artifacts</li>
+    <li><b>Model registry</b> — versioned, stage-gated artifacts (staging → prod); rollback is a pointer flip</li>
+    <li><b>Drift monitoring</b> — compare live feature distributions vs training (PSI / KL divergence); watch proxy metrics while true labels lag</li>
+    <li><b>Retraining triggers</b> — scheduled, drift-triggered, or performance-triggered; close the loop through the same gated pipeline</li>
+  </ul>
+  <p class="sub">The <span class="nd" data-key="mlops">MLOps</span> interview sentence: <em>"deploy is the midpoint, not the finish line — the design must say who notices when the model goes quietly wrong."</em></p>
+</section>
+<div class="notes">Label lag is the subtle point: for many systems (fraud, recommendations, churn) ground truth arrives days or weeks late — so you monitor input drift and proxy signals (prediction distribution shifts, calibration drift) in the meantime. Data drift vs concept drift distinction: inputs changed vs the input→label relationship changed; the second is invisible to input monitoring, which is why gated shadow evals and periodic relabeling exist.</div>
+
+<!-- 9 DECISION TABLE -->
+<section class="slide">
+  <div class="kicker">Rapid-Fire Kit</div>
+  <h2>The regime → tool map.</h2>
+  <table>
+    <tr><th>Need</th><th>Reach for</th><th>Because</th></tr>
+    <tr><td>Research / new model work</td><td class="num">PyTorch</td><td>ecosystem, eager debugging</td></tr>
+    <tr><td>TPUs / Google stack / big SPMD</td><td class="num">JAX + XLA</td><td>composable transforms, GSPMD sharding</td></tr>
+    <tr><td>Scale arbitrary Python</td><td class="num">Ray</td><td>tasks/actors, not a rewrite</td></tr>
+    <tr><td>Serve mixed model fleet</td><td class="num">Triton Server</td><td>multi-backend, dynamic batching</td></tr>
+    <tr><td>Serve LLMs specifically</td><td class="num">vLLM / TRT-LLM / SGLang</td><td>KV paging, continuous batching</td></tr>
+    <tr><td>Reproducible training DAGs</td><td class="num">Kubeflow / Vertex Pipelines</td><td>containerized, gated, lineage</td></tr>
+    <tr><td>Vectors, &lt;10M, existing Postgres</td><td class="num">pgvector</td><td>don't add infra you don't need</td></tr>
+    <tr><td>Kill training/serving skew</td><td class="num">feature store</td><td>one definition, two serving paths</td></tr>
+  </table>
+</section>
+<div class="notes">Practice answering any "what would you use for X?" with three beats: name the regime, name the tool, name the because — then volunteer the alternative you rejected and why. That fourth beat ('I'd use Ray here rather than Spark because the work isn't tabular ETL') is what separates tool-listers from engineers.</div>
+
+<!-- 10 CLOSE -->
+<section class="slide">
+  <div class="kicker">The One-Breath Answer</div>
+  <h1 style="font-size:1.95rem">"The stack is regimes, not brands: PyTorch for ecosystem, JAX-on-XLA for the Google/TPU path, Ray to distribute arbitrary Python, Triton Server (not the kernel DSL!) or an LLM engine to meet traffic, Kubeflow/Vertex Pipelines to make training a gated, versioned DAG, a feature store to kill training/serving skew, and drift monitoring because deploy is the midpoint — not the finish line."</h1>
+  <p class="sub">Expand on demand: <span class="nd" data-key="jax">JAX transforms</span> · <span class="nd" data-key="triton-server">two Tritons</span> · <span class="nd" data-key="ray">tasks vs actors</span> · <span class="nd" data-key="kubeflow">the pipeline DAG</span> · <span class="nd" data-key="vector-db">the pgvector ladder</span> · <span class="nd" data-key="mlops">drift</span></p>
+</section>
+<div class="notes">This deck completes Track D's breadth requirement. Highest-value rehearsals for a Google room specifically: the JAX slide (transforms + GSPMD), Vertex AI name-drops (Pipelines, Vector Search, Feature Store, Model Monitoring), and the two-Tritons disambiguation. Combined with the other nine decks, you can now walk the full lifecycle: data → training (parallelism decks) → compression (quant deck) → serving (inference deck) → retrieval (RAG/RecSys decks) → operations (this deck).</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">← → navigate · N notes · F fullscreen · hover amber = name-drop cards</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+let i=0;
+function show(n){ i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')show(i+1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+  else if(e.key.toLowerCase()==='n')document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.();
+});
+show(0);
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div>
+      <div class="t-row"><b>Why it matters:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect();
+    let x=r.left, y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20) x=innerWidth-tw-20;
+    if(y+th>innerHeight-20) y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

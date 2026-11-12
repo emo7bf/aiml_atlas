@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Quantization &amp; Compression: Fewer Bits, Same Brains</title>
+<style>
+  :root {
+    /* Identity for this topic: near-black "bit-crusher", ember accent, mono headings */
+    --bg: #0f1113; --panel: #191d21; --edge: #2c3339;
+    --ink: #edf0f2; --dim: #8e99a3;
+    --qz: #ff5c38;              /* topic accent: ember orange-red */
+    --gpu: #76b900;             /* shared: compute/GPU = green */
+    --host: #4da3ff;            /* shared: CPU/host/comm = blue */
+    --drop: #ffb454;            /* shared: name-drops = amber */
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); font-family:"Segoe UI", system-ui, sans-serif; overflow:hidden;
+         background-image: linear-gradient(rgba(255,92,56,.06) 1px, transparent 1px),
+                           linear-gradient(90deg, rgba(255,92,56,.06) 1px, transparent 1px);
+         background-size: 2.5vmin 2.5vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:6vh 7vw; flex-direction:column; justify-content:center; }
+  .slide.active { display:flex; }
+  .kicker { color:var(--qz); font-size:.95rem; letter-spacing:.3em; text-transform:uppercase; margin-bottom:1.3rem; font-weight:700; font-family:var(--mono); }
+  h1,h2 { font-family:var(--mono); font-weight:700; }
+  h1 { font-size:2.9rem; line-height:1.2; max-width:34ch; }
+  h2 { font-size:2rem; line-height:1.3; margin-bottom:1.8rem; max-width:40ch; }
+  .sub { color:var(--dim); font-size:1.2rem; margin-top:1.3rem; max-width:66ch; line-height:1.55; }
+  .big { font-family:var(--mono); font-size:4.2rem; font-weight:700; color:var(--qz); line-height:1.15; }
+  .biglabel { font-size:1.3rem; color:var(--dim); margin-top:1rem; max-width:62ch; }
+  .cols { display:flex; gap:1.8rem; align-items:stretch; }
+  .col { flex:1; }
+  .card { background:var(--panel); border-radius:14px; padding:1.4rem 1.6rem; border:1px solid var(--edge); }
+  .card h3 { font-size:1.12rem; margin-bottom:.55rem; color:var(--qz); font-family:var(--mono); }
+  .card p { color:var(--dim); font-size:1rem; line-height:1.5; }
+  .qz { color:var(--qz); } .gpu { color:var(--gpu); } .host { color:var(--host); }
+  ul.clean { list-style:none; font-size:1.18rem; line-height:1.95; max-width:76ch; }
+  ul.clean li::before { content:"▸ "; color:var(--qz); }
+  .nd { color:var(--drop); border-bottom:1px dashed var(--drop); cursor:help; font-family:var(--mono); font-size:.95em; }
+  #tip { position:fixed; z-index:50; max-width:470px; background:#07090b; border:1px solid var(--drop);
+         border-radius:12px; padding:1rem 1.2rem; font-size:.92rem; line-height:1.5; display:none; box-shadow:0 12px 40px #000c; }
+  #tip .t-name { color:var(--drop); font-weight:700; font-size:1.05rem; }
+  #tip .t-cat { color:var(--dim); font-size:.78rem; text-transform:uppercase; letter-spacing:.15em; margin-left:.6rem; }
+  #tip .t-row { margin-top:.5rem; color:#dde3e8; }
+  #tip .t-row b { color:var(--qz); font-weight:600; }
+  table { border-collapse:collapse; font-size:1.02rem; width:100%; max-width:980px; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:.5rem 1rem .5rem 0; border-bottom:2px solid var(--edge); }
+  td { padding:.5rem 1rem .5rem 0; border-bottom:1px solid #20262c; }
+  td.num { font-family:var(--mono); color:var(--qz); }
+  /* bit ladder */
+  .ladder { display:flex; flex-direction:column; gap:.45rem; max-width:720px; margin-top:.4rem; }
+  .rung { display:flex; align-items:center; gap:1rem; }
+  .bits { font-family:var(--mono); width:5.2rem; color:var(--dim); font-size:.95rem; text-align:right; }
+  .bar { height:2.1rem; border-radius:6px; display:flex; align-items:center; padding:0 .9rem;
+         font-family:var(--mono); font-size:.88rem; color:#0f1113; font-weight:700; white-space:nowrap; }
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#060809f2; border-top:2px solid var(--qz);
+           padding:1.1rem 7vw; font-size:1rem; color:#c9d2d9; line-height:1.5; display:none; max-height:38vh; overflow:auto; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#3b454d; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#3b454d; font-size:.85rem; }
+  .namedrop { margin-top:1.8rem; font-size:1rem; color:var(--drop); font-family:var(--mono); }
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">Quantization &amp; Compression · Interview Edition</div>
+  <h1>Fewer bits, <span class="qz">same brains</span>.<br>(Mostly.)</h1>
+  <p class="sub">Why cutting precision is the highest-leverage inference optimization, where it breaks (outlier channels), and the method zoo — <span class="nd" data-key="fp8">FP8</span>, <span class="nd" data-key="smoothquant">SmoothQuant</span>, <span class="nd" data-key="gptq">GPTQ</span>, <span class="nd" data-key="awq">AWQ</span>, <span class="nd" data-key="lora">QLoRA</span>, <span class="nd" data-key="gguf">GGUF</span> — sorted by what each actually buys.</p>
+  <div class="namedrop">→ advance · N speaker notes · hover amber terms for name-drop cards</div>
+</section>
+<div class="notes">Framing thesis: quantization works because decode is memory-bandwidth-bound (roofline callback) — every bit you shave off the weights is read-bandwidth you get back. The interview-grade skill is knowing WHICH cost each method attacks: memory, bandwidth, or the matmul itself.</div>
+
+<!-- 2 WHY -->
+<section class="slide">
+  <div class="kicker">Why It's the Biggest Lever</div>
+  <div class="big">tokens/sec ≈ BW ÷ weight-bytes</div>
+  <div class="biglabel">Autoregressive decode reads every weight per token. Halve the bits → double the ceiling. No other optimization has this slope.</div>
+  <p class="sub">70B model on one H100 (3.35 TB/s): BF16 = 140 GB — <b>doesn't fit</b>. FP8 = 70 GB → ~48 tok/s ceiling. INT4 = 35 GB → ~96 tok/s <em>and</em> room for KV cache. Quantization is simultaneously a <b>capacity</b>, <b>bandwidth</b>, and (sometimes) <b>compute</b> win.</p>
+</section>
+<div class="notes">The "sometimes compute" hedge matters: weight-only INT4 still dequantizes to FP16 for the matmul — bandwidth win only. Getting the actual MATH cheaper requires formats the tensor cores execute natively: FP8 on Hopper, INT8 (W8A8), FP4/MX on Blackwell. That distinction is slide 5's whole job.</div>
+
+<!-- 3 LADDER -->
+<section class="slide">
+  <div class="kicker">The Precision Ladder</div>
+  <h2>Each rung halves memory. The question is what breaks.</h2>
+  <div class="ladder">
+    <div class="rung"><span class="bits">16-bit</span><div class="bar" style="width:100%; background:#e8e2c8">BF16 / FP16 — the baseline, nothing breaks</div></div>
+    <div class="rung"><span class="bits">8-bit</span><div class="bar" style="width:72%; background:var(--drop)">FP8 E4M3/E5M2 — needs per-tensor scaling (Transformer Engine)</div></div>
+    <div class="rung"><span class="bits">8-bit</span><div class="bar" style="width:62%; background:#f09060">INT8 W8A8 — breaks on activation outliers → SmoothQuant</div></div>
+    <div class="rung"><span class="bits">4-bit</span><div class="bar" style="width:42%; background:var(--qz); color:#fff">INT4 weights — breaks naively → GPTQ / AWQ</div></div>
+    <div class="rung"><span class="bits">4-bit</span><div class="bar" style="width:36%; background:#c23a1d; color:#fff">NF4 — QLoRA's fine-tuning format</div></div>
+  </div>
+  <p class="sub"><span class="nd" data-key="fp8">FP8</span> comes in two flavors: <b>E4M3</b> (precision) for weights &amp; activations in the forward pass, <b>E5M2</b> (range) for gradients in the backward — gradients are spiky and need exponent, not mantissa.</p>
+</section>
+<div class="notes">Bytes/param: 2.0 (BF16) → 1.0 (FP8/INT8) → 0.5 (INT4/NF4). The E4M3/E5M2 assignment is a favorite trivia probe — anchor it with "gradients need RANGE": their magnitudes swing orders of magnitude during training, while forward tensors are better behaved. Below 4-bit: FP4 + microscaling (MX) block formats on Blackwell — shared exponent per 32-value block.</div>
+
+<!-- 4 OUTLIERS -->
+<section class="slide">
+  <div class="kicker">Where It Breaks</div>
+  <h2>The outlier-channel problem: a few activation channels are ~100× the rest.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3>The failure</h3>
+      <p>INT8 has 256 levels. One 100× outlier channel forces the quantization scale to cover it → every normal channel gets crushed into a handful of levels. Weights are well-behaved; <b>activations are the problem child</b> (emergent in LLMs &gt; ~6B params).</p>
+    </div>
+    <div class="col card">
+      <h3>The fix: migrate the difficulty</h3>
+      <p><span class="nd" data-key="smoothquant">SmoothQuant</span>: divide activations by per-channel scale s, multiply matching weight columns by s — <b>mathematically identical network</b>, flatter activations, slightly lumpier weights (which tolerate it). Result: full W8A8 → real INT8 tensor-core matmuls.</p>
+    </div>
+  </div>
+  <p class="sub">Alternative lineage: LLM.int8() keeps outlier channels in FP16 via mixed decomposition; rotation methods (QuaRot) scramble outliers away with orthogonal transforms.</p>
+</section>
+<div class="notes">The emergent-outliers observation is from Dettmers' LLM.int8() paper (2022) — outlier channels appear consistently past ~6.7B params and carry disproportionate information; naively clipping them craters accuracy. SmoothQuant's elegance: it exploits the associativity (X/s)·(s·W) = X·W, pre-folding s into the weights offline so inference pays nothing. 'Migrate difficulty from activations to weights' is the phrase to say out loud.</div>
+
+<!-- 5 PTQ METHODS -->
+<section class="slide">
+  <div class="kicker">Getting to 4-Bit</div>
+  <h2>GPTQ compensates the damage; AWQ avoids doing it.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3><span class="nd" data-key="gptq">GPTQ</span> — repair as you go</h3>
+      <p>Quantize weight columns one at a time; use second-order (Hessian) info to <b>adjust the not-yet-quantized weights</b> to absorb each column's error. Descends from Optimal Brain Surgeon (LeCun-era lineage — cite it).</p>
+    </div>
+    <div class="col card">
+      <h3><span class="nd" data-key="awq">AWQ</span> — protect what matters</h3>
+      <p>Observation: ~1% of weight channels are salient — found via <b>activation</b> magnitudes, not weight magnitudes. Scale those channels up before quantizing (and inputs down to compensate) so the grid preserves them. No retraining, uniform INT4, hardware-friendly.</p>
+    </div>
+  </div>
+  <p class="sub">Both are <b>PTQ</b> — post-training, calibration-set only, minutes-to-hours. The contrast sentence: <em>GPTQ fixes error after the fact with curvature; AWQ prevents error up front with saliency.</em></p>
+</section>
+<div class="notes">Follow-up interviewers like: "weight-only INT4 — where's the speedup?" Answer: memory capacity + bandwidth (weights stream 4× smaller), but the GEMM still runs FP16 after dequantization (fused into kernels like Marlin). So INT4 shines at small batch / decode (bandwidth-bound), while W8A8/FP8 shines at large batch / prefill (compute-bound). Mapping method → regime is the senior move.</div>
+
+<!-- 6 QLORA -->
+<section class="slide">
+  <div class="kicker">The Fine-Tuning Side</div>
+  <h2>LoRA trains the delta; QLoRA shrinks the base it sits on.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3><span class="nd" data-key="lora">LoRA</span></h3>
+      <p>Freeze W; learn ΔW = <b>B·A</b> with rank r ≈ 8–64. Trainable params drop ~1000×, optimizer state with them. Adapters merge into W at deploy — <b>zero inference cost</b> — or hot-swap for multi-tenant serving.</p>
+    </div>
+    <div class="col card">
+      <h3>QLoRA</h3>
+      <p>Backprop <em>through</em> a frozen <b>4-bit NF4</b> base (NormalFloat: quantiles of a Gaussian — matched to how weights are actually distributed), plus double quantization of the scales and paged optimizers. A 70B fine-tune on a single 48 GB GPU.</p>
+    </div>
+  </div>
+  <p class="sub">Memory math callback: full fine-tuning ≈ 16 bytes/param (Adam, mixed precision). QLoRA ≈ 0.5 bytes/param for the base + a sliver for adapters. That ratio is the democratization story.</p>
+</section>
+<div class="notes">Worth volunteering: gradients flow THROUGH the quantized base into the FP16 adapters — the base weights never update, so their quantization error is static and the adapters partially learn around it. NF4 detail: information-theoretically optimal for normally-distributed weights (equal probability mass per bin), which is why it beats uniform INT4 for this use. Serving angle: S-LoRA / vLLM batch dozens of adapters over one base model.</div>
+
+<!-- 7 EDGE -->
+<section class="slide">
+  <div class="kicker">Off the Datacenter</div>
+  <h2>GGUF / llama.cpp: quantization as a deployment strategy.</h2>
+  <ul class="clean">
+    <li>Single-file <span class="nd" data-key="gguf">GGUF</span> format: weights + tokenizer + metadata, <b>memory-mapped</b> — model loads lazily from disk</li>
+    <li>Block-wise <b>K-quants</b> (Q4_K_M, Q5_K_S...): per-block scales, mixed precision across layer types</li>
+    <li>Pure C/C++ runtime: CPUs, Apple Silicon (Metal), consumer GPUs, partial offload — no Python, no CUDA required</li>
+    <li>Why it matters in interviews: shows you think about the <b>edge/local regime</b> — where memory is the budget and <span class="host">CPU SIMD</span> does the math</li>
+  </ul>
+</section>
+<div class="notes">Contrast to complete the picture: TensorRT-LLM sits at the opposite extreme (max datacenter perf, NVIDIA-only), vLLM in the middle (throughput serving), llama.cpp/GGUF at the edge. Ollama wraps llama.cpp for UX. If asked "how would you run a 7B model on a laptop" — GGUF Q4_K_M ≈ 4 GB, mmap'd, Metal/AVX backend — concrete and done.</div>
+
+<!-- 8 NUMBERS -->
+<section class="slide">
+  <div class="kicker">Back-of-the-Envelope Kit</div>
+  <h2>The quantization numbers to recite.</h2>
+  <table>
+    <tr><th>Quantity</th><th>Value</th><th>Why it matters</th></tr>
+    <tr><td>Bytes/param: BF16 → FP8/INT8 → INT4</td><td class="num">2 → 1 → 0.5</td><td>the whole game in one row</td></tr>
+    <tr><td>70B model footprint</td><td class="num">140 → 70 → 35 GB</td><td>fits-on-one-H100 threshold crossed at FP8</td></tr>
+    <tr><td>FP8 vs BF16 tensor-core throughput</td><td class="num">~2×</td><td>native Hopper/Blackwell speedup</td></tr>
+    <tr><td>AWQ salient channels protected</td><td class="num">~1%</td><td>found by activation magnitude</td></tr>
+    <tr><td>Outlier channel magnitude</td><td class="num">~100×</td><td>why naive INT8 activations fail</td></tr>
+    <tr><td>LoRA trainable params (r=16, 70B)</td><td class="num">~0.1%</td><td>why the optimizer state vanishes</td></tr>
+  </table>
+</section>
+<div class="notes">Drill question to self-test: "Serve 70B at lowest latency on one GPU — walk me through it." INT4-AWQ weights (35 GB) + FP8 KV cache + continuous batching; decode ceiling ≈ 3.35 TB/s ÷ 35 GB ≈ 95 tok/s; check accuracy on a task-relevant eval, not just perplexity. Mentioning 'validate the quantized model on YOUR task' is the production-awareness flag.</div>
+
+<!-- 9 CLOSE -->
+<section class="slide">
+  <div class="kicker">The One-Breath Answer</div>
+  <h1 style="font-size:1.9rem">"Quantization attacks the memory-bandwidth wall: decode speed ≈ bandwidth ÷ weight-bytes, so FP8 and INT4 double and quadruple the ceiling — FP8's E4M3/E5M2 run natively on tensor cores, INT8 activations need SmoothQuant to tame 100× outlier channels, 4-bit weights need GPTQ's Hessian repair or AWQ's saliency protection, QLoRA extends it all to fine-tuning through a frozen NF4 base, and GGUF carries the same idea to laptops."</h1>
+  <p class="sub">Expand on demand: <span class="nd" data-key="fp8">FP8</span> · <span class="nd" data-key="smoothquant">SmoothQuant</span> · <span class="nd" data-key="gptq">GPTQ</span> · <span class="nd" data-key="awq">AWQ</span> · <span class="nd" data-key="lora">LoRA/QLoRA</span> · <span class="nd" data-key="gguf">GGUF</span></p>
+</section>
+<div class="notes">Rehearse with the numbers: 2→1→0.5 bytes/param, 140→70→35 GB, ~2× FP8, ~1% salient, ~100× outliers. Likely follow-ups: "weight-only vs W8A8?" (bandwidth vs actual int math — regime-dependent), "why E5M2 for gradients?" (range), "does quantization hurt?" (task-dependent; always eval downstream, perplexity hides regressions).</div>
+
+
+<!-- INTERACTIVE (v2) -->
+<section class="slide">
+  <div class="kicker">🎛 Interactive · Decode Speed Ceiling</div>
+  <h2>tokens/sec ≈ bandwidth ÷ weight-bytes — now with knobs.</h2>
+  <div class="aiml-widget" data-calc="decode">
+    <div class="sl-row"><label>model size (log, B params)</label><input type="range" data-k="logP" min="0" max="2.85" step="0.05" value="1.845"><span class="sl-val" data-k="logP"></span></div><div class="sl-row"><label>bits per weight</label><input type="range" data-k="bits" min="4" max="16" step="4" value="16"><span class="sl-val" data-k="bits"></span></div><div class="sl-row"><label>memory bandwidth</label><input type="range" data-k="bw" min="1" max="8" step="0.05" value="3.35"><span class="sl-val" data-k="bw"></span></div>
+    
+    <div class="wout"></div>
+  </div>
+  <p class="sub">70B at 16-bit: doesn't fit. Slide bits to 8 → fits, ~48 tok/s. To 4 → 35 GB and ~96 tok/s with KV room to spare. The entire deck thesis in three sliders.</p>
+</section>
+<div class="notes">Also try: 405B at 4-bit (202 GB — still needs TP even quantized), and 8B at 4-bit on 3.35 TB/s (~840 tok/s ceiling — why small models feel instant). Reminder: this is the batch-1 BANDWIDTH ceiling; real numbers land lower (kernel efficiency, KV reads).</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">← → navigate · N notes · F fullscreen · hover amber = name-drop cards</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+let i=0;
+function show(n){ i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')show(i+1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+  else if(e.key.toLowerCase()==='n')document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.();
+});
+show(0);
+
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div>
+      <div class="t-row"><b>Why it matters:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect();
+    let x=r.left, y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20) x=innerWidth-tw-20;
+    if(y+th>innerHeight-20) y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

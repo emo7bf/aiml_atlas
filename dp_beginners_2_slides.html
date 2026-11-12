@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dynamic Programming for Beginners · Part 2</title>
+<style>
+  :root {
+    /* Series identity, Part-2 variation: BLUEPRINT paper (Part 1 = cream, Part 2 = blue) */
+    --bg: #eef4fa; --panel: #ffffff; --edge: #c9d6e4;
+    --ink: #20242e; --dim: #6b7078;
+    --dp: #c2410c;              /* topic accent (kickers) */
+    --state: #4338ca;           /* STATE  = indigo (series-constant) */
+    --trans: #be123c;           /* TRANSITION = rose (series-constant) */
+    --base:  #0d9488;           /* BASE CASE = teal (series-constant) */
+    --drop: #9a6700;
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { color:var(--ink); font-family:Georgia, "Times New Roman", serif; overflow:hidden;
+         background: var(--bg);
+         background-image: linear-gradient(#c6d7e8a0 1px, transparent 1px),
+                           linear-gradient(90deg, #c6d7e8a0 1px, transparent 1px);
+         background-size: 4vmin 4vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:6vh 7vw; flex-direction:column; justify-content:center; }
+  .slide.active { display:flex; animation: rise .45s ease; }
+  @keyframes rise { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform:none; } }
+  .kicker { color:var(--dp); font-size:.95rem; letter-spacing:.3em; text-transform:uppercase; margin-bottom:1.2rem;
+            font-weight:700; font-family:"Segoe UI", sans-serif; }
+  h1 { font-size:3rem; line-height:1.2; max-width:32ch; font-weight:700; }
+  h2 { font-size:2rem; line-height:1.3; margin-bottom:1.4rem; max-width:42ch; font-weight:700; }
+  .sub { color:var(--dim); font-size:1.14rem; margin-top:1.1rem; max-width:70ch; line-height:1.6; font-family:"Segoe UI", sans-serif; }
+  .cols { display:flex; gap:1.6rem; align-items:stretch; }
+  .col { flex:1; }
+  .card { background:var(--panel); border-radius:12px; padding:1.3rem 1.5rem; border:1px solid var(--edge); box-shadow:2px 3px 0 #0001; }
+  .card h3 { font-size:1.1rem; margin-bottom:.5rem; }
+  .card p { color:var(--dim); font-size:.98rem; line-height:1.55; font-family:"Segoe UI", sans-serif; }
+  .st { color:var(--state); font-weight:700; } .tr { color:var(--trans); font-weight:700; } .bc { color:var(--base); font-weight:700; }
+  pre { background:#20242e; color:#e8ecf1; border-radius:10px; padding:1rem 1.3rem; font-family:var(--mono);
+        font-size:.95rem; line-height:1.55; overflow-x:auto; max-width:880px; }
+  pre .cst { color:#a5b4fc; } pre .ctr { color:#fda4af; } pre .cbc { color:#5eead4; } pre .cmt { color:#8b95a7; }
+  ul.clean { list-style:none; font-size:1.12rem; line-height:1.9; max-width:78ch; font-family:"Segoe UI", sans-serif; }
+  ul.clean li::before { content:"✎ "; color:var(--dp); }
+  .nd { color:var(--drop); border-bottom:1px dashed var(--drop); cursor:help; font-family:var(--mono); font-size:.95em; }
+  #tip { position:fixed; z-index:50; max-width:480px; background:#fffdf4; border:1.5px solid var(--drop); border-radius:12px;
+         padding:1rem 1.2rem; font-size:.92rem; line-height:1.5; display:none; box-shadow:0 12px 40px #00000030;
+         font-family:"Segoe UI", sans-serif; }
+  #tip .t-name { color:var(--drop); font-weight:700; font-size:1.05rem; }
+  #tip .t-cat { color:var(--dim); font-size:.78rem; text-transform:uppercase; letter-spacing:.15em; margin-left:.6rem; }
+  #tip .t-row { margin-top:.5rem; color:#3c4048; }
+  #tip .t-row b { color:var(--dp); font-weight:600; }
+  /* ---- the self-drawing DP tables (aligned to the paper's grid spirit) ---- */
+  .dpgrid { display:grid; gap:3px; width:fit-content; margin-top:.4rem; }
+  .dpcell { width:3.4rem; height:2.6rem; display:flex; align-items:center; justify-content:center;
+            font-family:var(--mono); font-size:.95rem; background:var(--panel); border:1px solid var(--edge);
+            border-radius:4px; opacity:0; transform:translateY(10px) scale(.92); transition:opacity .4s ease, transform .4s ease; }
+  .dpcell.on { opacity:1; transform:none; }
+  .dpcell.hdr { background:transparent; border:none; color:var(--dim); font-size:.8rem; }
+  .dpcell.b  { background:#d6f3ee; border-color:var(--base);  color:#0b5e55; font-weight:700; }   /* base */
+  .dpcell.v  { background:#e7e6fb; border-color:var(--state); color:var(--state); }               /* computed state */
+  .dpcell.hl { background:#fbdce3; border-color:var(--trans); color:var(--trans); font-weight:700;
+               box-shadow:0 0 0 2px #be123c33; }                                                   /* highlight (path/match) */
+  .replay { margin-top:.7rem; font-family:"Segoe UI",sans-serif; font-size:.85rem; color:var(--dim);
+            background:var(--panel); border:1px solid var(--edge); border-radius:4px; padding:.3rem .8rem; cursor:pointer; }
+  .replay:hover { border-color:var(--dp); color:var(--dp); }
+  table { border-collapse:collapse; font-size:1rem; width:100%; max-width:920px; font-family:"Segoe UI", sans-serif; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:.5rem 1rem .5rem 0; border-bottom:2px solid var(--edge); }
+  td { padding:.5rem 1rem .5rem 0; border-bottom:1px solid #eceadd; }
+  td.num { font-family:var(--mono); color:var(--dp); }
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#20242ef5; border-top:2px solid var(--dp); padding:1.1rem 7vw;
+           font-size:1rem; color:#dfe3ea; line-height:1.5; display:none; max-height:38vh; overflow:auto; font-family:"Segoe UI", sans-serif; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#b2ac95; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#b2ac95; font-size:.85rem; font-family:"Segoe UI", sans-serif; }
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">Dynamic Programming · Beginners Part 2 of 3</div>
+  <h1>The <span class="st">state</span> gains a second dimension.<br>The recipe doesn't change.</h1>
+  <p class="sub">Grids, knapsack, and string alignment — the three families that cover most 2-D interview DP. Same five questions as Part 1; the tables just get wider. Watch them <b>draw themselves on the paper</b> as you arrive.</p>
+  <p class="sub"><span class="st">STATE = indigo</span> · <span class="tr">TRANSITION = rose</span> · <span class="bc">BASE CASE = teal</span> — same colors as Part 1, always.</p>
+</section>
+<div class="notes">Part 2 scope: Unique Paths + Min Path Sum (grid family), 0/1 Knapsack (choose-or-skip with a budget), LCS (string alignment). Each gets the full 5-step recipe treatment. The animated tables fill in dependency order on purpose — the ANIMATION ORDER IS the topological order from step 4 of the recipe.</div>
+
+<!-- 2 WHEN 1-D FAILS -->
+<section class="slide">
+  <div class="kicker">Why a Second Dimension</div>
+  <h2>When your English sentence "leaks," add an index — don't fight it.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3 class="st">The leak test (from Part 1)</h3>
+      <p>Try: "<span class="st">dp[w] = best value within capacity w</span>"… but the best value <em>depends on which items are still available</em>. The sentence leaks → the state is missing a dimension → "<span class="st">dp[i][w] = best value using only the first i items, within capacity w</span>." Sealed.</p>
+    </div>
+    <div class="col card">
+      <h3>The three 2-D families</h3>
+      <p>▸ <b>Grid walks</b> — state = a cell (row, col)<br>
+         ▸ <b>Budgeted choices</b> — state = (items considered, budget left)<br>
+         ▸ <b>Two sequences</b> — state = (prefix of A, prefix of B)<br>
+      Spot which family a problem belongs to and the <span class="st">state writes itself</span>.</p>
+    </div>
+  </div>
+  <p class="sub">Complexity stays mechanical: <span class="nd" data-key="dp-complexity">states × transition</span> — an m×n table with O(1) transitions is O(mn). Done before you code.</p>
+</section>
+<div class="notes">This slide is the bridge from the Part-1 pre-test miss ("whether to rob house i") to 2-D: the fix for a leaking state is ALWAYS to encode the leaked information as another index. The three-family taxonomy covers the large majority of interview 2-D DP; Part 3 handles the exotic states (intervals, bitmasks, tree nodes).</div>
+
+<!-- 3 UNIQUE PATHS ANIMATED -->
+<section class="slide">
+  <div class="kicker">Family 1 · Grid Walks — Unique Paths (LeetCode 62)</div>
+  <h2>"Robot moves only right/down. How many paths corner to corner?"</h2>
+  <div class="cols">
+    <div class="col">
+      <div class="dpgrid" id="gridPaths"></div>
+      <button class="replay" data-anim="paths">↻ replay the fill</button>
+    </div>
+    <div class="col card" style="max-width:420px">
+      <h3>The recipe, run</h3>
+      <p><b class="st">1 · State:</b> <span class="st">dp[r][c] = # paths reaching cell (r,c)</span><br>
+      <b class="tr">2 · Transition:</b> last move was ↓ or →, so <span class="tr">dp[r][c] = dp[r−1][c] + dp[r][c−1]</span><br>
+      <b class="bc">3 · Base:</b> <span class="bc">first row & column = 1</span> (one way: straight line)<br>
+      <b>4 · Order:</b> row-major — exactly the order the cells appear ←<br>
+      <b>5 ·</b> answer bottom-right · O(mn) / O(n) with one row</p>
+    </div>
+  </div>
+</section>
+<div class="notes">The animation IS the lesson: cells appear in dependency order (each cell only after its up & left neighbors), teal frame first (base), indigo interior (computed states). Say it in an interview as "I fill in an order where dependencies are already resolved." Fun fact for bonus points: the answer is C(m+n−2, m−1) — a binomial coefficient — because a path is a choice of which steps go down. DP and combinatorics agree.</div>
+
+<!-- 4 PATHS CODE + MIN PATH SUM -->
+<section class="slide">
+  <div class="kicker">Grid Walks · Code + the Min-Cost Twin</div>
+  <h2>Change the combiner, get a new problem. The table is the same shape.</h2>
+  <pre><span class="cmt"># Unique Paths — counting: combiner is +</span>
+def unique_paths(m, n):
+    <span class="cbc">row = [1]*n</span>                              <span class="cmt"># base row; space-optimized to one row already</span>
+    for r in range(1, m):
+        for c in range(1, n):
+            <span class="ctr">row[c] = row[c] + row[c-1]</span>        <span class="cmt"># up (old row[c]) + left (new row[c-1])</span>
+    return row[-1]
+
+<span class="cmt"># Min Path Sum (LC 64) — optimizing: combiner is min, plus the cell's cost</span>
+def min_path_sum(g):
+    m, n = len(g), len(g[0])
+    <span class="cbc">row = list(itertools.accumulate(g[0]))</span>   <span class="cmt"># base: first row = running cost</span>
+    for r in range(1, m):
+        row[0] += g[r][0]
+        for c in range(1, n):
+            <span class="ctr">row[c] = g[r][c] + min(row[c], row[c-1])</span>
+    return row[-1]</pre>
+  <p class="sub">Same <span class="st">state</span>, same order, same O(mn) — only the <span class="tr">combiner</span> changed (+ → min). This is Part 1's counting-vs-optimizing split, now in 2-D. The one-row trick: <span class="tr">row[c]</span> still holds the <em>up</em> value right before you overwrite it.</p>
+</section>
+<div class="notes">The space optimization deserves narration in an interview: "each cell depends only on the row above and the cell to the left, so I keep one row; reading row[c] before assignment gives me 'up' for free." That sentence shows you understand the dependency window, not just the trick. Follow-up variant: Unique Paths II (obstacles) — set blocked cells to 0, base cases stop at the first obstacle.</div>
+
+<!-- 5 KNAPSACK ANIMATED -->
+<section class="slide">
+  <div class="kicker">Family 2 · Budgeted Choices — 0/1 Knapsack</div>
+  <h2>"Items with weights &amp; values, capacity 8. Maximize value."</h2>
+  <div class="cols">
+    <div class="col">
+      <div class="dpgrid" id="gridKnap"></div>
+      <button class="replay" data-anim="knap">↻ replay the fill</button>
+      <p class="sub" style="font-size:.9rem">items: A(w2,v3) · B(w3,v4) · C(w4,v5) · D(w5,v8) — rows = items considered, cols = capacity</p>
+    </div>
+    <div class="col card" style="max-width:420px">
+      <h3>The recipe, run</h3>
+      <p><b class="st">1 · State:</b> <span class="st">dp[i][w] = best value from the first i items within capacity w</span><br>
+      <b class="tr">2 · Transition:</b> last decision = item i in or out:<br><span class="tr">dp[i][w] = max(dp[i−1][w], dp[i−1][w−wᵢ] + vᵢ)</span><br>
+      <b class="bc">3 · Base:</b> <span class="bc">row 0 = 0</span> (no items, no value)<br>
+      <b>4 · Order:</b> item by item &nbsp; <b>5 ·</b> dp[n][W] · O(nW)</p>
+    </div>
+  </div>
+</section>
+<div class="notes">Knapsack is THE archetype of "condition on the last decision" with a budget: every resource-allocation DP (coin change, partition, subset-sum, target-sum) is knapsack in costume. The O(nW) complexity is 'pseudo-polynomial' — polynomial in the VALUE of W, not its bit-length — a nice senior aside. The rose cells in the animation mark where 'take' beat 'skip'.</div>
+
+<!-- 6 KNAPSACK CODE -->
+<section class="slide">
+  <div class="kicker">Knapsack · Code + the Famous Direction Bug</div>
+  <h2>One row again — but now the loop MUST run backwards.</h2>
+  <pre><span class="cmt"># 2-D (clear): dp[i][w] = max(skip, take)</span>
+def knapsack(items, W):                       <span class="cmt"># items = [(weight, value), ...]</span>
+    <span class="cbc">dp = [0]*(W+1)</span>                            <span class="cmt"># one row: dp[w] = best value within capacity w</span>
+    for wt, val in items:
+        for w in range(W, wt-1, -1):          <span class="cmt"># ← DESCENDING. The whole exam is this line.</span>
+            <span class="ctr">dp[w] = max(dp[w], dp[w-wt] + val)</span>
+    return dp[W]</pre>
+  <ul class="clean">
+    <li><b>Why backwards?</b> dp[w−wt] must be the <em>previous item's</em> row. Ascending order overwrites it first → you'd reuse item i within its own row → you've accidentally solved <b>unbounded</b> knapsack</li>
+    <li><b>The flip side:</b> unbounded knapsack / <b>coin change</b> wants exactly that reuse → loop <em>ascending</em>. One character of difference, two different problems</li>
+    <li>This is Part 1's bug #2 ("iteration order violates dependencies") in its most-asked costume</li>
+  </ul>
+</section>
+<div class="notes">If an interviewer asks exactly one thing about knapsack, it's the loop direction. The clean mental model: descending = each item used ≤ once (reads come from yesterday's row); ascending = items reusable (reads come from today's). Coin Change (LC 322) is the ascending twin: dp[a] = min(dp[a], dp[a−coin]+1), loop ascending — worth writing in the playground tonight.</div>
+
+<!-- 7 LCS ANIMATED -->
+<section class="slide">
+  <div class="kicker">Family 3 · Two Sequences — Longest Common Subsequence</div>
+  <h2>"ROBIN" vs "GOBLIN" — align two strings with one table.</h2>
+  <div class="cols">
+    <div class="col">
+      <div class="dpgrid" id="gridLCS"></div>
+      <button class="replay" data-anim="lcs">↻ replay the fill</button>
+    </div>
+    <div class="col card" style="max-width:430px">
+      <h3>The recipe, run</h3>
+      <p><b class="st">1 · State:</b> <span class="st">dp[i][j] = LCS length of A's first i chars and B's first j chars</span><br>
+      <b class="tr">2 · Transition:</b> condition on the last characters:<br>
+      match → <span class="tr">dp[i][j] = dp[i−1][j−1] + 1</span> (rose cells!)<br>
+      else → <span class="tr">max(dp[i−1][j], dp[i][j−1])</span><br>
+      <b class="bc">3 · Base:</b> <span class="bc">empty prefix rows/cols = 0</span><br>
+      <b>5 ·</b> dp[m][n] = <b>4</b> ("OBIN") · O(mn)</p>
+    </div>
+  </div>
+</section>
+<div class="notes">The rose diagonal cells are the character matches — watching them light up teaches the recurrence better than the formula. LCS is the gateway to the string-DP family: Edit Distance (LC 72) is the same table with three transitions (insert/delete/replace, each cost 1); diff tools and DNA alignment are this exact algorithm at industrial scale. 'Subsequence ≠ substring' is the definitional trap to pre-empt out loud.</div>
+
+<!-- 8 BUGS 2D -->
+<section class="slide">
+  <div class="kicker">The 2-D Bug List (Extends Part 1's)</div>
+  <ul class="clean">
+    <li><b>Loop direction</b> — the knapsack descending/ascending trap: decide <em>reuse or not</em> first, then pick the direction</li>
+    <li><b class="bc">Padding off-by-one</b> — index dp by <em>prefix length</em> (size m+1×n+1 with a zero row/col), not by character index; kills most LCS bugs before they exist</li>
+    <li><b>Row/col swapped</b> — say out loud which index is which ("i = items, w = capacity") and keep it; mixing them compiles fine and fails silently</li>
+    <li><b class="st">State still leaking</b> — if (i, j) isn't enough ("…but it depends whether I'm holding the stock"), add dimension #3; small extra dimensions (2–3 values) are cheap</li>
+    <li><b>Space-optimizing too early</b> — write the clear 2-D version first; collapse to one row only after it's correct</li>
+  </ul>
+  <p class="sub">Testing ritual, upgraded: trace a <b>2×3 table by hand</b> before trusting any 2-D loop. Same discipline, one more index.</p>
+</section>
+<div class="notes">The "say which index is which, out loud" habit is both a bug-preventer and a communication score. Stock-problem preview (the dimension-3 example): dp[i][holding] — Best Time to Buy/Sell with cooldown/fees are 2-state machines over time, the gentlest introduction to added dimensions, good playground material after this deck.</div>
+
+<!-- 9 CLOSE -->
+<section class="slide">
+  <div class="kicker">The One-Breath Answer</div>
+  <h1 style="font-size:1.9rem">"When the 1-D <span class="st">state sentence leaks</span>, I add an index: grid walks take a cell, budgeted choices take <span class="st">(items, capacity)</span>, two sequences take <span class="st">(prefix, prefix)</span> — the <span class="tr">transition still conditions on the last decision</span>, <span class="bc">bases are the empty row and column</span>, cost is still states × transition, and the table collapses to one row once I know the dependency window — looping <em>backwards</em> if each item may be used only once."</h1>
+  <p class="sub">Part 3 (Advanced) next: interval DP, bitmask DP, DP on trees, and when the state is something weirder than an index. Same five questions. Always.</p>
+</section>
+<div class="notes">Retrieval practice assignment before Part 3: in the playground, write coin change (ascending-loop knapsack twin) and edit distance (LCS with three transitions) cold, running the 5-step recipe in comments first. Those two plus this deck's three = the five tables that anchor all of 2-D interview DP.</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">← → navigate · N notes · F fullscreen · hover amber = cards · ↻ replays the table fills</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+
+/* ---------- self-drawing DP tables ---------- */
+function buildGrid(id, rows, cols, cellFn){
+  // cellFn(r,c) -> {text, cls, delay}  (delay = animation order step)
+  const g=document.getElementById(id);
+  g.style.gridTemplateColumns=`repeat(${cols}, auto)`;
+  g.innerHTML="";
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    const spec=cellFn(r,c), d=document.createElement("div");
+    d.className="dpcell "+spec.cls; d.textContent=spec.text; d.dataset.delay=spec.delay;
+    g.appendChild(d);
+  }
+}
+function playGrid(id){
+  const cells=[...document.getElementById(id).querySelectorAll(".dpcell")];
+  cells.forEach(c=>c.classList.remove("on"));
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{      // restart transitions cleanly
+    cells.forEach(c=>setTimeout(()=>c.classList.add("on"), 150+ +c.dataset.delay*95));
+  }));
+}
+
+/* Unique Paths 5x7: value = C-style dp, fill anti-diagonally (dependency order) */
+const PM=5, PN=7, pdp=Array.from({length:PM},()=>Array(PN).fill(0));
+for(let r=0;r<PM;r++) for(let c=0;c<PN;c++) pdp[r][c]=(r===0||c===0)?1:pdp[r-1][c]+pdp[r][c-1];
+buildGrid("gridPaths", PM, PN, (r,c)=>({
+  text:pdp[r][c],
+  cls:(r===0||c===0)?"b":(r===PM-1&&c===PN-1)?"hl":"v",
+  delay:r+c }));
+
+/* Knapsack: items A..D, capacity 0..8; header row/col; rose where 'take' won */
+const ITEMS=[["A",2,3],["B",3,4],["C",4,5],["D",5,8]], CAP=8;
+const kdp=Array.from({length:ITEMS.length+1},()=>Array(CAP+1).fill(0));
+const took=Array.from({length:ITEMS.length+1},()=>Array(CAP+1).fill(false));
+ITEMS.forEach(([_,wt,val],idx)=>{ const i=idx+1;
+  for(let w=0;w<=CAP;w++){
+    kdp[i][w]=kdp[i-1][w];
+    if(w>=wt && kdp[i-1][w-wt]+val>kdp[i][w]){ kdp[i][w]=kdp[i-1][w-wt]+val; took[i][w]=true; }
+  }});
+buildGrid("gridKnap", ITEMS.length+2, CAP+2, (r,c)=>{
+  if(r===0&&c===0) return {text:"", cls:"hdr", delay:0};
+  if(r===0) return {text:"w"+(c-1), cls:"hdr", delay:0};
+  if(c===0) return {text:r===1?"∅":ITEMS[r-2][0], cls:"hdr", delay:0};
+  const i=r-1, w=c-1;
+  return { text:kdp[i][w],
+           cls:i===0?"b":(took[i][w]?"hl":"v"),
+           delay:1+(i)*2+(w*0.35) };});
+
+/* LCS: "ROBIN" (rows) vs "GOBLIN" (cols), padded; rose on diagonal matches */
+const A="ROBIN", B="GOBLIN";
+const ldp=Array.from({length:A.length+1},()=>Array(B.length+1).fill(0));
+const match=Array.from({length:A.length+1},()=>Array(B.length+1).fill(false));
+for(let i=1;i<=A.length;i++) for(let j=1;j<=B.length;j++){
+  if(A[i-1]===B[j-1]){ ldp[i][j]=ldp[i-1][j-1]+1; match[i][j]=true; }
+  else ldp[i][j]=Math.max(ldp[i-1][j], ldp[i][j-1]);
+}
+buildGrid("gridLCS", A.length+2, B.length+2, (r,c)=>{
+  if(r===0&&c===0) return {text:"", cls:"hdr", delay:0};
+  if(r===0) return {text:c===1?"ε":B[c-2], cls:"hdr", delay:0};
+  if(c===0) return {text:r===1?"ε":A[r-2], cls:"hdr", delay:0};
+  const i=r-1, j=c-1;
+  return { text:ldp[i][j],
+           cls:(i===0||j===0)?"b":(match[i][j]?"hl":"v"),
+           delay:(i+j)*0.9 };});
+
+/* which slide owns which animation */
+const ANIMS={}; 
+slides.forEach((s,idx)=>{ const g=s.querySelector(".dpgrid"); if(g) ANIMS[idx]=g.id; });
+document.querySelectorAll(".replay").forEach(b=>{
+  b.addEventListener("click",e=>{ e.stopPropagation(); playGrid(b.previousElementSibling.id); });
+});
+
+/* ---------- nav ---------- */
+let i=0;
+function show(n){ i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length;
+  if(ANIMS[i]!==undefined) playGrid(ANIMS[i]);               // the table draws itself on arrival
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')show(i+1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+  else if(e.key.toLowerCase()==='n')document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.();
+});
+show(0);
+
+/* ---------- name-drop tooltips ---------- */
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div>
+      <div class="t-row"><b>Why it matters:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect();
+    let x=r.left, y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20) x=innerWidth-tw-20;
+    if(y+th>innerHeight-20) y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

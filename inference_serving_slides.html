@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Inference Serving: Two Phases, One SLO</title>
+<style>
+  :root {
+    /* Identity: cool-gray paper + deep pine */
+    --bg: #eef2f4; --panel: #ffffff; --edge: #d5dde1;
+    --ink: #17242a; --dim: #5e7078;
+    --sv: #0f766e;              /* topic accent: pine */
+    --gpu: #5a8f00;             /* shared: compute/GPU = green (dark for light bg) */
+    --host: #1d6fd1;            /* shared: CPU/host/comm = blue (dark for light bg) */
+    --drop: #9a6700;            /* shared: name-drops = amber (dark for light bg) */
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); font-family:"Segoe UI", system-ui, sans-serif; overflow:hidden;
+         background-image: radial-gradient(rgba(15,118,110,.13) 1px, transparent 1.5px);
+         background-size: 3.5vmin 3.5vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:6vh 7vw; flex-direction:column; justify-content:center; }
+  .slide.active { display:flex; }
+  .kicker { color:var(--sv); font-size:1rem; letter-spacing:.3em; text-transform:uppercase; margin-bottom:1.3rem; font-weight:700; }
+  h1 { font-size:3.1rem; line-height:1.15; max-width:30ch; font-weight:800; }
+  h2 { font-size:2.25rem; line-height:1.25; margin-bottom:1.8rem; max-width:38ch; font-weight:800; }
+  .sub { color:var(--dim); font-size:1.2rem; margin-top:1.3rem; max-width:66ch; line-height:1.55; }
+  .big { font-family:var(--mono); font-size:3.6rem; font-weight:700; color:var(--sv); line-height:1.2; }
+  .biglabel { font-size:1.3rem; color:var(--dim); margin-top:1rem; max-width:62ch; }
+  .cols { display:flex; gap:1.8rem; align-items:stretch; }
+  .col { flex:1; }
+  .card { background:var(--panel); border-radius:14px; padding:1.4rem 1.6rem; border:1px solid var(--edge); box-shadow:0 2px 10px #0000000d; }
+  .card h3 { font-size:1.14rem; margin-bottom:.55rem; color:var(--sv); }
+  .card p { color:var(--dim); font-size:1rem; line-height:1.5; }
+  .sv { color:var(--sv); } .gpu { color:var(--gpu); } .host { color:var(--host); }
+  ul.clean { list-style:none; font-size:1.2rem; line-height:1.95; max-width:76ch; }
+  ul.clean li::before { content:"▸ "; color:var(--sv); }
+  .nd { color:var(--drop); border-bottom:1px dashed var(--drop); cursor:help; font-family:var(--mono); font-size:.95em; }
+  #tip { position:fixed; z-index:50; max-width:470px; background:#fffef9; border:1.5px solid var(--drop);
+         border-radius:12px; padding:1rem 1.2rem; font-size:.92rem; line-height:1.5; display:none; box-shadow:0 12px 40px #00000030; }
+  #tip .t-name { color:var(--drop); font-weight:700; font-size:1.05rem; }
+  #tip .t-cat { color:var(--dim); font-size:.78rem; text-transform:uppercase; letter-spacing:.15em; margin-left:.6rem; }
+  #tip .t-row { margin-top:.5rem; color:#33424a; }
+  #tip .t-row b { color:var(--sv); font-weight:600; }
+  table { border-collapse:collapse; font-size:1.03rem; width:100%; max-width:980px; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:.5rem 1rem .5rem 0; border-bottom:2px solid var(--edge); }
+  td { padding:.55rem 1rem .55rem 0; border-bottom:1px solid #e3e9ec; }
+  td.num { font-family:var(--mono); color:var(--sv); }
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#122a2ef5; border-top:2px solid var(--sv);
+           padding:1.1rem 7vw; font-size:1rem; color:#d7e6e4; line-height:1.5; display:none; max-height:38vh; overflow:auto; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#9fb2ba; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#9fb2ba; font-size:.85rem; }
+  .namedrop { margin-top:1.8rem; font-size:1rem; color:var(--drop); font-family:var(--mono); }
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">Inference Serving · Interview Edition</div>
+  <h1>One request, <span class="sv">two phases</span> —<br>and they want different hardware.</h1>
+  <p class="sub">Prefill vs decode is the fault line every serving idea follows: <span class="nd" data-key="continuous-batching">continuous batching</span>, <span class="nd" data-key="chunked-prefill">chunked prefill</span>, <span class="nd" data-key="radix">RadixAttention</span>, <span class="nd" data-key="disagg">disaggregation</span>, <span class="nd" data-key="speculative">speculative decoding</span>, and the engine zoo from <span class="nd" data-key="trt-llm">TensorRT-LLM</span> to <span class="nd" data-key="ray-serve">Ray Serve</span>.</p>
+  <div class="namedrop">→ advance · N speaker notes · hover amber terms for name-drop cards</div>
+</section>
+<div class="notes">The two SLO words to use from sentence one: TTFT (time to first token — prefill's metric) and TPOT (time per output token — decode's metric). Every technique in this deck optimizes one without wrecking the other.</div>
+
+<!-- 2 TWO PHASES -->
+<section class="slide">
+  <div class="kicker">The Fault Line</div>
+  <h2>Prefill is compute-bound. Decode is bandwidth-bound. Everything follows.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3 class="gpu">Prefill (the prompt)</h3>
+      <p>All n prompt tokens processed in parallel — big GEMMs, tensor cores saturated. <b>Compute-bound</b>, like training. Metric: <b>TTFT</b>. One 100k-token prompt ≈ seconds of pure math.</p>
+    </div>
+    <div class="col card">
+      <h3 class="host">Decode (the generation)</h3>
+      <p>One token at a time: read <em>all weights + whole KV cache</em> to produce one token. <b>Memory-bandwidth-bound</b>, arithmetic intensity ≈ 1. Metric: <b>TPOT</b>. Ceiling: tokens/sec ≈ BW ÷ bytes-read.</p>
+    </div>
+  </div>
+  <p class="sub">Roofline callback: prefill lives on the compute roof, decode on the bandwidth slope. Batching moves decode toward compute-bound — which is why throughput serving is a batching game.</p>
+</section>
+<div class="notes">Why decode is intensity≈1: each weight is read once and used for one multiply-accumulate per sequence. Batching B sequences reuses each weight B times → intensity B → at B≈300 (H100's FLOPs/byte ratio) decode finally becomes compute-bound. That single piece of arithmetic explains continuous batching's existence.</div>
+
+<!-- 3 BATCHING -->
+<section class="slide">
+  <div class="kicker">The Scheduler</div>
+  <h2>Batch at the token level, not the request level.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3><span class="nd" data-key="continuous-batching">Continuous batching</span> (Orca, OSDI '22)</h3>
+      <p>Recompose the batch <b>every decode step</b>: a finished sequence's slot is instantly refilled by a waiting request. No padding, no waiting for the slowest sequence. 2–10× throughput; in every modern engine.</p>
+    </div>
+    <div class="col card">
+      <h3><span class="nd" data-key="chunked-prefill">Chunked prefill</span></h3>
+      <p>A 100-page paste would freeze everyone's decode for seconds. Split its prefill into chunks, interleave with decode steps — <b>TPOT protected</b>, TTFT for the big prompt slightly worse. The right trade.</p>
+    </div>
+  </div>
+  <p class="sub">Together these are the default modern scheduler: token-level batches mixing decode steps + prefill chunks, rebuilt every iteration.</p>
+</section>
+<div class="notes">Interview phrasing: "static batching has head-of-line blocking in two dimensions — across requests (batch waits for slowest) and within a request (giant prefill blocks everyone). Continuous batching fixes the first, chunked prefill the second." Orca is the citation; vLLM/TRT-LLM ('in-flight batching')/SGLang all implement it.</div>
+
+<!-- 4 KV MANAGEMENT -->
+<section class="slide">
+  <div class="kicker">The KV Cache Is the Working Set</div>
+  <h2>Page it like memory. Share it like a filesystem.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3><span class="nd" data-key="vllm">PagedAttention</span> (vLLM)</h3>
+      <p>KV cache in fixed-size blocks with an indirection table — no contiguous reservation, no fragmentation → <b>denser batches</b> → throughput. OS virtual memory, reinvented for attention.</p>
+    </div>
+    <div class="col card">
+      <h3><span class="nd" data-key="radix">RadixAttention</span> (SGLang)</h3>
+      <p>Organize cached blocks in a <b>radix tree by token prefix</b>: shared system prompts, few-shot headers, and agent-tree branches reuse KV automatically → <b>TTFT ≈ 0</b> for the shared part.</p>
+    </div>
+  </div>
+  <p class="sub">Both are OS ideas crossing into ML systems — paging and prefix trees. Saying that out loud is free interviewer goodwill.</p>
+</section>
+<div class="notes">Numbers to attach: KV cache for a 70B GQA model ≈ 0.3–0.6 MB per token (precision-dependent) — a 32k-context conversation is ~10–20 GB, which is why fragmentation mattered enough to invent paging. Prefix caching shines in agents: a tree of tool-use branches shares the long trunk; only the leaves pay prefill.</div>
+
+<!-- 5 DISAGGREGATION -->
+<section class="slide">
+  <div class="kicker">Separate the Phases Physically</div>
+  <h2>Prefill pools and decode pools: the p99 architecture.</h2>
+  <ul class="clean">
+    <li><b>Problem:</b> colocated prefill bursts inflate decode tail latency — p99 TPOT spikes whenever a long prompt lands</li>
+    <li><b><span class="nd" data-key="disagg">Disaggregation</span>:</b> prefill nodes (compute-optimized, maximize TTFT throughput) and decode nodes (bandwidth/KV-capacity-optimized) — <b>KV cache shipped between pools</b> over NVLink/RDMA</li>
+    <li><b>Cost:</b> the KV transfer itself + capacity planning for two pools; worth it at scale, overkill for one node</li>
+    <li>Cite: <b>Splitwise</b> (Microsoft), <b>DistServe</b> (2024); NVIDIA <b>Dynamo</b> productionizes the pattern</li>
+  </ul>
+</section>
+<div class="notes">The L5 framing: chunked prefill and disaggregation solve the SAME interference problem at different scales — chunked prefill time-slices one pool (simple, some TTFT cost), disaggregation space-partitions two pools (hardware-matched, pays KV shipping). Choosing between them based on fleet size is the judgment answer. KV transfer math: a 10k-token prefill's cache ≈ 3–6 GB → sub-100ms over NVLink, so the transfer is affordable.</div>
+
+<!-- 6 SPECULATIVE -->
+<section class="slide">
+  <div class="kicker">Spending Compute to Buy Bandwidth</div>
+  <div class="big">draft k, verify in 1 pass</div>
+  <div class="biglabel">A small draft model guesses k tokens; the target model validates all k in one parallel forward — one weight-read now yields up to k tokens.</div>
+  <p class="sub"><span class="nd" data-key="speculative">Speculative decoding</span> gives 2–2.5× decode speedup with <b>provably identical output distribution</b> (rejection sampling keeps the target model's probabilities exact). It works because decode has idle compute to burn — the roofline gap is the budget. Cite Leviathan et al. 2023 (Google) &amp; Chen et al. 2023 (DeepMind).</p>
+</section>
+<div class="notes">Mechanism worth narrating: accept draft token i with prob min(1, p_target/p_draft); on first rejection, resample from the adjusted distribution — expectation exactly matches the target model (the proof is 4 lines; knowing it exists is enough). Acceptance rate drives everything: ~70-80% typical; drops on hard/unusual text — so speedup is content-dependent. Variants: Medusa (extra heads), EAGLE (current SOTA drafting), n-gram lookup (free wins on copy-heavy tasks like code edits).</div>
+
+<!-- 7 THE STACK -->
+<section class="slide">
+  <div class="kicker">The Engine Zoo</div>
+  <h2>Pick by regime: ecosystem, peak, prefix reuse, edge — then orchestrate above.</h2>
+  <table>
+    <tr><th>Layer</th><th>Options</th><th>Pick when</th></tr>
+    <tr><td>Engine</td><td class="num">vLLM</td><td>default: open, flexible, huge ecosystem</td></tr>
+    <tr><td></td><td class="num">TensorRT-LLM</td><td>own NVIDIA fleet, want peak tok/s — compiled engines</td></tr>
+    <tr><td></td><td class="num">SGLang</td><td>agent/multi-turn workloads — RadixAttention prefix reuse</td></tr>
+    <tr><td></td><td class="num">llama.cpp / GGUF</td><td>edge, local, CPU/Metal</td></tr>
+    <tr><td>Sharding</td><td class="num">TP within node</td><td>70B+ models: Megatron-style splits at inference (<span class="nd" data-key="tensor-parallel">TP</span> deck applies verbatim)</td></tr>
+    <tr><td>Orchestration</td><td class="num">Ray Serve / KServe / Triton</td><td>compose embedders + retrievers + guardrails + LLM into one <span class="nd" data-key="ray-serve">pipeline</span></td></tr>
+  </table>
+</section>
+<div class="notes">System-design answer shape: "engine choice is a regime question, not a religion question." TP at inference is lighter than training (no gradients/optimizer, activations only) but the all-reduce per layer still binds it to NVLink — same placement rule as the TP deck. Orchestration layer exists because production is never just the LLM: embedding, retrieval, safety filters, rerankers each scale independently.</div>
+
+<!-- 8 NUMBERS -->
+<section class="slide">
+  <div class="kicker">Back-of-the-Envelope Kit</div>
+  <h2>Serving numbers to recite.</h2>
+  <table>
+    <tr><th>Quantity</th><th>Value</th><th>Why it matters</th></tr>
+    <tr><td>Decode ceiling</td><td class="num">BW ÷ bytes-read</td><td>the master formula (weights + KV)</td></tr>
+    <tr><td>Batch size where decode goes compute-bound</td><td class="num">~300 (H100 BF16)</td><td>= FLOPs/byte ratio of the chip</td></tr>
+    <tr><td>KV per token, 70B GQA</td><td class="num">~0.3 MB</td><td>32k convo ≈ 10 GB — why paging exists</td></tr>
+    <tr><td>Speculative speedup</td><td class="num">2–2.5×</td><td>distribution-preserving — free quality</td></tr>
+    <tr><td>Interactive SLO targets</td><td class="num">TTFT &lt; 500 ms · TPOT ~ 20–50 ms</td><td>~human reading speed</td></tr>
+    <tr><td>Continuous batching win</td><td class="num">2–10× throughput</td><td>vs static batching (Orca)</td></tr>
+  </table>
+</section>
+<div class="notes">Drill: "Design serving for a 70B chat model, 10k concurrent users." Shape: TP=4-8 within node → INT4/FP8 weights → continuous batching + chunked prefill → prefix caching for system prompts → speculative decoding for TPOT → disaggregate pools if fleet is big enough → autoscale on queue depth; SLOs: TTFT p99 < 1s, TPOT p50 ~30ms. Walk that chain and you've covered five decks in one answer.</div>
+
+<!-- 9 CLOSE -->
+<section class="slide">
+  <div class="kicker">The One-Breath Answer</div>
+  <h1 style="font-size:2rem">"Serving splits at the prefill/decode fault line — compute-bound TTFT vs bandwidth-bound TPOT — so you batch continuously at the token level, chunk big prefills or disaggregate the phases onto separate pools, page and prefix-share the KV cache, quantize the weights, and spend decode's idle compute on speculative drafts — each lever mapped to the phase whose SLO it protects."</h1>
+  <p class="sub">Expand on demand: <span class="nd" data-key="continuous-batching">Orca</span> · <span class="nd" data-key="chunked-prefill">chunked prefill</span> · <span class="nd" data-key="disagg">Splitwise/DistServe</span> · <span class="nd" data-key="radix">RadixAttention</span> · <span class="nd" data-key="speculative">speculative</span> · <span class="nd" data-key="trt-llm">TRT-LLM</span> · <span class="nd" data-key="ray-serve">Ray Serve</span></p>
+</section>
+<div class="notes">This deck chains tightly with: GPU deck (roofline, bandwidth ceiling), Quantization deck (bytes-read reduction), Transformer deck (KV cache anatomy, GQA), TP deck (sharding 70B+). The full-stack serving answer in the slide-8 notes is the capstone rehearsal piece.</div>
+
+
+<!-- INTERACTIVE (v2) -->
+<section class="slide">
+  <div class="kicker">🎛 Interactive · Batching Regime Finder</div>
+  <h2>Slide the batch until decode goes compute-bound.</h2>
+  <div class="aiml-widget" data-calc="batchregime">
+    <div class="sl-row"><label>batch size (log)</label><input type="range" data-k="logB" min="0" max="2.8" step="0.05" value="0.6"><span class="sl-val" data-k="logB"></span></div><div class="sl-row"><label>chip FLOPs/byte ratio</label><input type="range" data-k="ridge" min="100" max="600" step="10" value="300"><span class="sl-val" data-k="ridge"></span></div>
+    
+    <div class="wout"></div>
+  </div>
+  <p class="sub">Decode intensity ≈ batch size. Below the chip ratio (~300 for H100 BF16) you're paying for ALUs that idle; above it, batching has bought back the compute roof.</p>
+</section>
+<div class="notes">Connect out loud: batch 1 → 0.3% ALU utilization (why single-stream decode is pure bandwidth), batch 64 → ~21%, batch 300+ → compute-bound (prefill-like). Continuous batching exists to keep real traffic near the high end of this slider.</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">← → navigate · N notes · F fullscreen · hover amber = name-drop cards</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+let i=0;
+function show(n){ i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')show(i+1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+  else if(e.key.toLowerCase()==='n')document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.();
+});
+show(0);
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div>
+      <div class="t-row"><b>Why it matters:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect();
+    let x=r.left, y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20) x=innerWidth-tw-20;
+    if(y+th>innerHeight-20) y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

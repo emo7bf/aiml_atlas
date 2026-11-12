@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pipeline Parallelism: Filling the Bubble</title>
+<style>
+  :root {
+    /* New identity for this topic: indigo "assembly line" */
+    --bg: #15122b; --panel: #1f1b3a; --edge: #322c5a;
+    --ink: #efedfa; --dim: #9b94c2;
+    --pipe: #e85d9e;            /* pipeline-specific concepts: magenta */
+    --gpu: #76b900;             /* shared convention: compute/GPU = green */
+    --host: #4da3ff;            /* shared convention: CPU/host/comm = blue */
+    --drop: #ffb454;            /* shared convention: name-drops = amber */
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); font-family:"Segoe UI", system-ui, sans-serif; overflow:hidden;
+         background-image: radial-gradient(rgba(232,93,158,.10) 1px, transparent 1.5px);
+         background-size: 3.5vmin 3.5vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:6vh 7vw; flex-direction:column; justify-content:center; }
+  .slide.active { display:flex; }
+  .kicker { color:var(--pipe); font-size:1.05rem; letter-spacing:.3em; text-transform:uppercase; margin-bottom:1.2rem; font-weight:600; }
+  h1,h2 { font-family: Georgia, "Times New Roman", serif; font-weight:700; }
+  h1 { font-size:3.3rem; line-height:1.15; max-width:30ch; }
+  h2 { font-size:2.4rem; line-height:1.22; margin-bottom:2.2rem; max-width:34ch; }
+  .sub { color:var(--dim); font-size:1.25rem; margin-top:1.4rem; max-width:62ch; line-height:1.5; }
+  .big { font-family:Georgia, serif; font-size:5rem; font-weight:700; color:var(--pipe); line-height:1.1; }
+  .biglabel { font-size:1.35rem; color:var(--dim); margin-top:1rem; max-width:60ch; }
+  .cols { display:flex; gap:2.2rem; align-items:stretch; }
+  .col { flex:1; }
+  .card { background:var(--panel); border-radius:14px; padding:1.5rem 1.7rem; border:1px solid var(--edge); }
+  .card h3 { font-size:1.2rem; margin-bottom:.6rem; font-family:Georgia, serif; }
+  .card p { color:var(--dim); font-size:1.02rem; line-height:1.5; }
+  .pipe { color:var(--pipe); } .gpu { color:var(--gpu); } .host { color:var(--host); }
+  ul.clean { list-style:none; font-size:1.25rem; line-height:2.05; max-width:70ch; }
+  ul.clean li::before { content:"▸ "; color:var(--pipe); }
+  .namedrop { margin-top:2rem; font-size:1rem; color:var(--drop); font-family:var(--mono); }
+  /* hoverable name-drops */
+  .nd { color:var(--drop); border-bottom:1px dashed var(--drop); cursor:help; font-family:var(--mono); font-size:.95em; }
+  #tip { position:fixed; z-index:50; max-width:460px; background:#0d0b1d; border:1px solid var(--drop);
+         border-radius:12px; padding:1rem 1.2rem; font-size:.92rem; line-height:1.5; display:none;
+         box-shadow:0 12px 40px #000a; }
+  #tip .t-name { color:var(--drop); font-weight:700; font-size:1.05rem; }
+  #tip .t-cat { color:var(--dim); font-size:.78rem; text-transform:uppercase; letter-spacing:.15em; margin-left:.6rem; }
+  #tip .t-row { margin-top:.5rem; color:#d8d4ee; }
+  #tip .t-row b { color:var(--pipe); font-weight:600; }
+  /* pipeline schedule diagram */
+  .sched { display:grid; gap:4px; margin-top:.5rem; }
+  .cell { height:2.4rem; border-radius:5px; display:flex; align-items:center; justify-content:center;
+          font-family:var(--mono); font-size:.8rem; color:#0d0b1d; font-weight:700; }
+  .cell.f { background:var(--gpu); } .cell.b { background:var(--host); }
+  .cell.idle { background:#262145; color:#4b4380; font-weight:400; }
+  .cell.lbl { background:none; color:var(--dim); justify-content:flex-start; font-weight:400; }
+  .legend { display:flex; gap:1.6rem; margin-top:1rem; color:var(--dim); font-size:.95rem; align-items:center; }
+  .sw { display:inline-block; width:1rem; height:1rem; border-radius:3px; margin-right:.45rem; vertical-align:-2px; }
+  table { border-collapse:collapse; font-size:1.1rem; width:100%; max-width:900px; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:.55rem 1.1rem .55rem 0; border-bottom:2px solid var(--edge); }
+  td { padding:.6rem 1.1rem .6rem 0; border-bottom:1px solid #27224a; }
+  td.num { font-family:var(--mono); color:var(--pipe); }
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#0a0817f2; border-top:2px solid var(--pipe);
+           padding:1.1rem 7vw; font-size:1rem; color:#cdc8e4; line-height:1.5; display:none; max-height:38vh; overflow:auto; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#413a6e; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#413a6e; font-size:.85rem; }
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">Pipeline Parallelism · Interview Edition</div>
+  <h1>Split the model by <span class="pipe">depth</span>.<br>Fill the <span class="pipe">bubble</span> with micro-batches.</h1>
+  <p class="sub">How <span class="nd" data-key="gpipe">GPipe</span> — a Google paper — turned "the model doesn't fit on one GPU" into an assembly line. Hover anything <span style="color:var(--drop)">amber</span> for the interview-ready backstory.</p>
+  <div class="namedrop">→ advance · N speaker notes · hover amber terms for name-drop cards</div>
+</section>
+<div class="notes">Opening frame: data parallelism scales the BATCH; pipeline parallelism scales the MODEL. When one GPU can't hold the weights + optimizer state + activations, you must split the model itself — by depth (pipeline) or by width (tensor parallel). This deck is the depth story.</div>
+
+<!-- 2 WHY -->
+<section class="slide">
+  <div class="kicker">Why It Exists</div>
+  <div class="big">16 bytes / parameter</div>
+  <div class="biglabel">Adam mixed-precision training cost: 2 (weights) + 2 (grads) + 4+4+4 (FP32 master copy, momentum, variance)</div>
+  <p class="sub">A 70B model → <b style="color:var(--ink)">~1.1 TB of state</b>, vs 80 GB of <span class="nd" data-key="hbm">HBM</span> on an H100. No single device survives this. Something must be split: the optimizer state (<span class="nd" data-key="zero">ZeRO</span>/<span class="nd" data-key="fsdp">FSDP</span>), the layers (<b class="pipe">pipeline</b>), or the matrices (<span class="nd" data-key="tensor-parallel">tensor parallel</span>).</p>
+</section>
+<div class="notes">This memory arithmetic is the single best way to open any answer about model parallelism — it proves the need before describing the mechanism. 16 bytes/param is for Adam in mixed precision; inference is just 2 bytes/param (FP16) or 1 (FP8), which is why inference fits where training doesn't.</div>
+
+<!-- 3 NAIVE -->
+<section class="slide">
+  <div class="kicker">The Naive Version Fails</div>
+  <h2>Put layers 1–8 on GPU 0, layers 9–16 on GPU 1... and watch utilization hit 1/p.</h2>
+  <div class="sched" id="naive"></div>
+  <div class="legend">
+    <span><span class="sw" style="background:var(--gpu)"></span>forward</span>
+    <span><span class="sw" style="background:var(--host)"></span>backward</span>
+    <span><span class="sw" style="background:#262145"></span>idle</span>
+  </div>
+  <p class="sub">With one batch and 4 stages, each GPU works <b>1/4</b> of the time. You bought four GPUs to get the throughput of one.</p>
+</section>
+<div class="notes">Vocabulary: this is "naive model parallelism" or "vertical model parallelism without pipelining." The dependency chain forces serialization: stage 2 can't start until stage 1 finishes the whole batch. Interviewers often start here and ask "how do you fix the idleness?" — the answer is the next slide.</div>
+
+<!-- 4 GPIPE -->
+<section class="slide">
+  <div class="kicker">The Fix — GPipe (Google, 2019)</div>
+  <h2>Slice the batch into micro-batches; stages work on different slices simultaneously.</h2>
+  <div class="sched" id="gpipe"></div>
+  <div class="legend">
+    <span><span class="sw" style="background:var(--gpu)"></span>forward Fᵢ</span>
+    <span><span class="sw" style="background:var(--host)"></span>backward Bᵢ</span>
+    <span><span class="sw" style="background:#262145"></span>bubble</span>
+  </div>
+  <p class="sub"><span class="nd" data-key="gpipe">GPipe</span> schedule: all forwards, then all backwards. Gradients from <span class="nd" data-key="microbatch">micro-batches</span> accumulate — mathematically identical to the full batch.</p>
+</section>
+<div class="notes">Cite: "GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism" — Huang et al., Google, NeurIPS 2019. The diagram shows p=4 stages, m=4 micro-batches. Note the gray triangles at the start (fill) and end (drain) — that's the bubble. Also note: micro-batching is just gradient accumulation distributed across stages; batch-norm is the one op it breaks (GPipe handles it specially; most Transformers use LayerNorm so nobody cares).</div>
+
+<!-- 5 BUBBLE MATH -->
+<section class="slide">
+  <div class="kicker">The Formula To Recite</div>
+  <div class="big">bubble = (p − 1) / (m + p − 1)</div>
+  <div class="biglabel">p = pipeline stages · m = micro-batches</div>
+  <p class="sub">p = 8, m = 32 → 7/39 ≈ <b style="color:var(--ink)">18% wasted</b>. Push m to 128 → ~5%. The <span class="nd" data-key="pipeline-bubble">bubble</span> is an <span class="nd" data-key="amdahl">Amdahl's Law</span> serial fraction: amortize it with more micro-batches — until activation memory or tiny-kernel inefficiency bites back.</p>
+</section>
+<div class="notes">Derivation worth knowing: the pipeline takes (m + p − 1) slots to do m slots of useful work per stage; the extra (p − 1) is fill + drain. Trade-off to volunteer: bigger m shrinks the bubble but (a) GPipe-style scheduling holds more in-flight activations and (b) smaller micro-batches mean smaller GEMMs that utilize the GPU worse — there's a sweet spot, not a free lunch.</div>
+
+<!-- 6 1F1B -->
+<section class="slide">
+  <div class="kicker">The Memory Problem → 1F1B</div>
+  <h2>GPipe hoards activations for all m micro-batches. 1F1B caps it at p.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3 class="pipe">GPipe schedule</h3>
+      <p>All forwards first → every stage holds activations for <b>m</b> micro-batches before any backward frees them. Memory grows with m — exactly the knob you wanted to crank.</p>
+    </div>
+    <div class="col card">
+      <h3 class="pipe">1F1B schedule</h3>
+      <p>After warm-up, each stage alternates <b>one forward, one backward</b>. In-flight activations capped at <b>≤ p</b> micro-batches. Same bubble fraction. From <span class="nd" data-key="pipedream">PipeDream</span>; what <span class="nd" data-key="megatron">Megatron-LM</span> ships.</p>
+    </div>
+  </div>
+  <p class="sub">Plus <span class="nd" data-key="checkpointing">activation checkpointing</span>: drop intermediates, recompute in backward — ~33% more compute for an order of magnitude less activation memory.</p>
+</section>
+<div class="notes">This GPipe→1F1B progression is the classic interview arc: name the problem with the simple schedule (activation memory scales with m), then name the fix (1F1B keeps bubble identical but caps memory). PipeDream's original async version let stages run on stale weights (weight stashing) — modern synchronous training uses "PipeDream-Flush" / 1F1B. Checkpointing was in GPipe from day one; they called it re-materialization.</div>
+
+<!-- 7 FRONTIER -->
+<section class="slide">
+  <div class="kicker">Shrinking the Bubble Further</div>
+  <ul class="clean">
+    <li><b>Interleaved stages</b> — each GPU holds several non-contiguous layer chunks (<span class="nd" data-key="megatron">Megatron</span> "virtual pipeline"): bubble ÷ v, at the cost of v× more communication</li>
+    <li><b>Zero-bubble schedules</b> — split backward into input-grad vs weight-grad passes and slot the pieces into idle gaps (ZB-H1/ZB-V)</li>
+    <li><b><span class="nd" data-key="dualpipe">DualPipe</span></b> — DeepSeek-V3 feeds micro-batches from both ends of the pipeline and overlaps comm with compute: near-zero bubble</li>
+  </ul>
+  <p class="sub">The arc to narrate: GPipe (2019) → 1F1B → interleaved → zero-bubble (2023–24). Each step buys utilization with scheduling complexity.</p>
+</section>
+<div class="notes">The key insight behind zero-bubble: backward is really TWO computations — dL/d(input), needed urgently by the upstream stage, and dL/d(weights), which can wait. Decoupling them gives the scheduler flexible filler work. DualPipe is a great recency signal: DeepSeek-V3 technical report (Dec 2024), bidirectional pipeline + full comm/compute overlap, part of their famously cheap training run.</div>
+
+<!-- 8 COMMUNICATION -->
+<section class="slide">
+  <div class="kicker">Why PP Crosses Nodes and TP Doesn't</div>
+  <h2>Pipeline parallelism is the cheapest talker in the parallelism family.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3 class="host">What PP sends</h3>
+      <p>One activation tensor, <b>point-to-point</b>, per micro-batch, per stage boundary. Hidden-size × micro-batch bytes. Tolerates slow links → runs fine over <span class="nd" data-key="infiniband">InfiniBand</span> <b>across nodes</b>.</p>
+    </div>
+    <div class="col card">
+      <h3 class="host">What TP sends</h3>
+      <p><b>All-reduces inside every layer</b> (two per Transformer block, via <span class="nd" data-key="nccl">NCCL</span>). Needs <span class="nd" data-key="nvlink">NVLink</span>-class bandwidth → stays <b>inside a node</b>.</p>
+    </div>
+  </div>
+  <p class="sub">Standard cluster recipe: <span class="nd" data-key="tensor-parallel">TP</span> within the 8-GPU node, <b class="pipe">PP</b> across nodes, <span class="nd" data-key="data-parallel">DP</span> across replicas — "3D parallelism."</p>
+</section>
+<div class="notes">This slide answers the L4+ follow-up "how do you decide which parallelism goes where?" The answer is pure bandwidth arithmetic: TP communicates activations per-layer collectively (needs 900 GB/s NVLink), PP communicates once per stage boundary point-to-point (fine at 400 Gb/s InfiniBand). Google-stack equivalent: on TPUs, GSPMD/XLA handles sharding and the ICI mesh changes the trade-offs — TPU pods favor more TP-like sharding because ICI is uniform.</div>
+
+<!-- 9 NUMBERS -->
+<section class="slide">
+  <div class="kicker">Back-of-the-Envelope Kit</div>
+  <h2>Numbers that make pipeline answers concrete.</h2>
+  <table>
+    <tr><th>Quantity</th><th>Value</th><th>Why it matters</th></tr>
+    <tr><td>Training state, Adam mixed precision</td><td class="num">~16 B/param</td><td>proves one GPU can't hold big models</td></tr>
+    <tr><td>Bubble @ p=8, m=32</td><td class="num">≈ 18%</td><td>(p−1)/(m+p−1) in action</td></tr>
+    <tr><td>1F1B in-flight activations</td><td class="num">≤ p micro-batches</td><td>vs m for GPipe — why 1F1B won</td></tr>
+    <tr><td>Checkpointing overhead</td><td class="num">~33% compute</td><td>one extra forward per backward</td></tr>
+    <tr><td>PP boundary traffic</td><td class="num">batch × hidden × 2 B</td><td>tiny → survives cross-node links</td></tr>
+    <tr><td>TP traffic</td><td class="num">all-reduce / layer</td><td>huge → needs NVLink, stays in-node</td></tr>
+  </table>
+</section>
+<div class="notes">Worked example to rehearse: Llama-70B, 80 layers, p=8 → 10 layers/stage ≈ 17.5 GB of FP16 weights per stage — fits comfortably, leaving room for activations and (with ZeRO/DP) sharded optimizer state. Showing you can place a real model onto real hardware in 30 seconds is exactly the L4→L5 signal.</div>
+
+<!-- 10 CLOSE -->
+<section class="slide">
+  <div class="kicker">The One-Breath Answer</div>
+  <h1 style="font-size:2.35rem">"Pipeline parallelism splits layers into stages on different GPUs, streams micro-batches through to keep all stages busy, and eats a bubble of (p−1)/(m+p−1) idle time — which we shrink with more micro-batches, 1F1B scheduling, interleaving, and zero-bubble tricks — in exchange for the cheapest communication profile of any model-parallel scheme."</h1>
+  <p class="sub">Then expand on demand: <span class="nd" data-key="gpipe">GPipe</span> · <span class="nd" data-key="pipedream">1F1B</span> · <span class="nd" data-key="checkpointing">checkpointing</span> · <span class="nd" data-key="dualpipe">DualPipe</span> · <span class="nd" data-key="tensor-parallel">TP vs PP placement</span></p>
+</section>
+<div class="notes">Rehearse the breath, then practice expanding each amber term into a 90-second deep dive. Pipeline parallelism answers almost always get the follow-up "what's the downside?" — lead with the bubble, then activation memory, then load-balancing stages of unequal cost (embedding and LM-head stages are the classic imbalance).</div>
+
+
+<!-- INTERACTIVE (v2) -->
+<section class="slide">
+  <div class="kicker">🎛 Interactive · Bubble Calculator</div>
+  <h2>(p−1)/(m+p−1), as a toy you can feel.</h2>
+  <div class="aiml-widget" data-calc="bubble">
+    <div class="sl-row"><label>pipeline stages p</label><input type="range" data-k="p" min="2" max="64" step="1" value="16"><span class="sl-val" data-k="p"></span></div><div class="sl-row"><label>micro-batches m</label><input type="range" data-k="m" min="1" max="256" step="1" value="48"><span class="sl-val" data-k="m"></span></div>
+    
+    <div class="wout"></div>
+  </div>
+  <p class="sub">Recreate the quiz you missed: p=16, m=48 → ~24%. Then crank m and watch the bubble die — and read why that's only safe under 1F1B.</p>
+</section>
+<div class="notes">Rehearsal: set p=8 m=32 (the deck's example, 18%), then p=16 m=48 (the quiz, 23.8%), then m=256 (bubble ~6% but GPipe activation memory ∝ m is now brutal — the 1F1B line below the bar is the senior caveat).</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">← → navigate · N notes · F fullscreen · hover amber = name-drop cards</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+/* ---- slide nav ---- */
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+let i=0;
+function show(n){ i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')show(i+1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+  else if(e.key.toLowerCase()==='n')document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.();
+});
+show(0);
+
+/* ---- schedule diagrams ---- */
+function renderSched(el, p, m, pipelined){
+  const grid=document.getElementById(el);
+  const T = pipelined ? 2*(m+p-1) : 2*p*m;  // time slots
+  grid.style.gridTemplateColumns = `5.5rem repeat(${T}, 1fr)`;
+  for(let s=0; s<p; s++){
+    const lbl=document.createElement('div');
+    lbl.className='cell lbl'; lbl.textContent='GPU '+s;
+    grid.appendChild(lbl);
+    for(let t=0; t<T; t++){
+      const c=document.createElement('div'); c.className='cell idle'; c.textContent='';
+      let job=null;
+      if(pipelined){
+        const ft = t - s;                       // forward: staircase down
+        if(ft>=0 && ft<m) job=['f','F'+(ft+1)];
+        const bt = t - (m+p-1) - (p-1-s);        // backward: staircase up
+        if(bt>=0 && bt<m) job=['b','B'+(bt+1)];
+      } else {
+        if(t < p*m && Math.floor(t/m)===s) job=['f','F'];            // fwd sweep down
+        const bt = t - p*m;
+        if(bt>=0 && Math.floor(bt/m)===(p-1-s)) job=['b','B'];       // bwd sweep up
+      }
+      if(job){ c.className='cell '+job[0]; c.textContent=job[1]; }
+      grid.appendChild(c);
+    }
+  }
+}
+renderSched('naive', 4, 1, false);   // naive: 1 batch, serial F then B
+renderSched('gpipe', 4, 4, true);    // GPipe: 4 micro-batches pipelined
+
+/* ---- name-drop tooltips ---- */
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',e=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div>
+      <div class="t-row"><b>Why it matters:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect();
+    let x=r.left, y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';           // reset to measure
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20) x=innerWidth-tw-20;
+    if(y+th>innerHeight-20) y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Algorithm Crib Sheet · The Highlighted Gaps</title>
+<style>
+  :root { --bg:#f7f4ee; --panel:#ffffff; --edge:#ddd5c4; --ink:#211f28; --dim:#746e62;
+    --ac:#b45309; --ok:#0d9488; --warn:#be123c; --mono:"Cascadia Code","Consolas",monospace; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,sans-serif;padding:4.6rem 5vw 4rem;
+       background-image:linear-gradient(30deg,#e3d9c380 1px,transparent 1px),linear-gradient(-60deg,#e3d9c380 1px,transparent 1px);
+       background-size:4.5vmin 4.5vmin;}
+  h1{font-family:Georgia,serif;font-size:2.1rem;}
+  .lead{color:var(--dim);margin:.4rem 0 1.6rem;max-width:84ch;}
+  h2{font-family:Georgia,serif;font-size:1.3rem;margin:2rem 0 .6rem;color:var(--ac);}
+  .sec{background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:1.1rem 1.3rem;max-width:1040px;
+       box-shadow:2px 3px 0 #0001;}
+  table{border-collapse:collapse;width:100%;font-size:.92rem;}
+  th{text-align:left;color:var(--dim);font-weight:600;padding:.4rem .9rem .4rem 0;border-bottom:2px solid var(--edge);}
+  td{padding:.45rem .9rem .45rem 0;border-bottom:1px solid #efe9db;vertical-align:top;}
+  td.num{font-family:var(--mono);color:var(--ac);white-space:nowrap;}
+  pre{background:#20242e;color:#e8ecf1;border-radius:10px;padding:.9rem 1.1rem;font-family:var(--mono);
+      font-size:.88rem;line-height:1.55;overflow-x:auto;margin:.6rem 0;}
+  pre .c{color:#8b95a7;} pre .k{color:#5eead4;} pre .r{color:#fda4af;}
+  .say{background:#fdf3e4;border-left:4px solid var(--ac);border-radius:0 8px 8px 0;padding:.55rem .9rem;
+       margin-top:.7rem;font-size:.92rem;}
+  .say::before{content:"🗣 say in the room · ";font-weight:700;color:var(--ac);font-size:.8rem;}
+  .stop{background:#fdeef1;border-left:4px solid var(--warn);border-radius:0 8px 8px 0;padding:.55rem .9rem;
+        margin-top:.5rem;font-size:.92rem;}
+  .stop::before{content:"✋ STOP / caveat · ";font-weight:700;color:var(--warn);font-size:.8rem;}
+  .pill{display:inline-block;font-size:.75rem;padding:.1rem .55rem;border-radius:999px;background:#efe9db;color:#6a6355;margin-left:.5rem;}
+  a{color:#1d6fd1;text-decoration:none;} a:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+<h1>🧮 Algorithm Crib Sheet</h1>
+<p class="lead">Built from the yellow highlighter in your prep-guide screenshots: sorting · binary search · divide &amp; conquer · heaps · queues · Dijkstra · A* · graph runtime complexity · NP-complete. Styled like your flashcards: meaning, then the <b>say-in-the-room</b> line, then the caveat. CNNs &amp; SVMs → your 📐 Fundamentals deck has dedicated slides (7 and 8); re-read those, they're already built.</p>
+
+<h2>1 · Sorting (and the search it unlocks)</h2>
+<div class="sec">
+  <table>
+    <tr><th>Algorithm</th><th>Time (avg / worst)</th><th>Space</th><th>Stable?</th><th>The one thing to know</th></tr>
+    <tr><td>Merge sort</td><td class="num">n log n / n log n</td><td class="num">O(n)</td><td>✅</td><td>the divide &amp; conquer poster child; worst-case safe</td></tr>
+    <tr><td>Quicksort</td><td class="num">n log n / n²</td><td class="num">O(log n)</td><td>❌</td><td>fast in practice; n² on adversarial pivots (say "randomized pivot")</td></tr>
+    <tr><td>Heapsort</td><td class="num">n log n / n log n</td><td class="num">O(1)</td><td>❌</td><td>in-place + worst-case safe; rarely asked to write</td></tr>
+    <tr><td>Insertion sort</td><td class="num">n² / n²</td><td class="num">O(1)</td><td>✅</td><td>O(n) on nearly-sorted data — why Timsort uses it</td></tr>
+    <tr><td><b>Timsort</b> (Python's <code>sorted</code>)</td><td class="num">n / n log n</td><td class="num">O(n)</td><td>✅</td><td>merge+insertion hybrid, exploits existing runs — "I'd call sorted(), which is Timsort"</td></tr>
+    <tr><td>Counting / radix</td><td class="num">n + k</td><td class="num">O(n+k)</td><td>✅</td><td>beats n log n when keys are small integers — the comparison bound only binds comparisons</td></tr>
+  </table>
+  <pre><span class="c"># binary search — the loop-invariant version (say the invariant out loud!)</span>
+def binary_search(arr, target):
+    lo, hi = 0, len(arr) - 1          <span class="c"># invariant: answer (if any) lives in arr[lo..hi]</span>
+    while lo <= hi:                   <span class="c"># <= : a 1-element window still needs checking</span>
+        mid = (lo + hi) // 2
+        if   arr[mid] == target: return mid
+        elif arr[mid] <  target: lo = mid + 1   <span class="c"># mid is ruled out — always shrink!</span>
+        else:                    hi = mid - 1
+    return -1                         <span class="c"># bisect_left/bisect_right do the boundary variants</span></pre>
+  <div class="say">"The input is sorted — that's a signal: binary search gives O(log n), or two pointers give O(n)." Sorted input should trigger this reflex <em>before</em> you design anything else.</div>
+  <div class="stop">The classic binary-search bug is an infinite loop from <code>lo = mid</code> (window never shrinks). Always <code>mid ± 1</code> on the ruled-out side. And know <code>bisect</code> exists — using the standard library is a senior move, not a cheat.</div>
+</div>
+
+<h2>2 · Divide &amp; Conquer <span class="pill">vs DP — you know this fork already</span></h2>
+<div class="sec">
+  <p style="font-size:.95rem; line-height:1.6">Split the problem, solve pieces recursively, combine. <b>The recognition fork you already own:</b> subproblems <em>don't overlap</em> → divide &amp; conquer (mergesort's halves are disjoint); subproblems <em>repeat</em> → DP (your whole Garden). Canonical examples: merge sort, quicksort/quickselect (k-th element in O(n) average), binary search (D&amp;C with one branch), closest pair of points.</p>
+  <div class="say">For recurrences: "T(n) = 2T(n/2) + O(n) solves to O(n log n)" — knowing the mergesort recurrence cold covers 90% of D&amp;C complexity questions; name-drop the Master Theorem for the general case.</div>
+</div>
+
+<h2>3 · Heaps <span class="pill">highlighted — likely gap #1</span></h2>
+<div class="sec">
+  <table>
+    <tr><th>Operation</th><th>Cost</th><th>Python</th></tr>
+    <tr><td>peek min</td><td class="num">O(1)</td><td class="num">h[0]</td></tr>
+    <tr><td>push / pop</td><td class="num">O(log n)</td><td class="num">heapq.heappush / heappop</td></tr>
+    <tr><td>build from list</td><td class="num">O(n) — not n log n!</td><td class="num">heapq.heapify(h)</td></tr>
+    <tr><td>max-heap</td><td class="num">—</td><td class="num">push negated values (Python has no max-heap)</td></tr>
+  </table>
+  <pre><span class="c"># THE heap pattern: top-k largest in O(n log k) — keep a small min-heap of survivors</span>
+import heapq
+def top_k(nums, k):
+    heap = nums[:k]; heapq.heapify(heap)        <span class="c"># min-heap of the current k best</span>
+    for x in nums[k:]:
+        if x > heap[0]:                         <span class="c"># beats the weakest survivor?</span>
+            heapq.heapreplace(heap, x)          <span class="c"># pop+push in one O(log k)</span>
+    return heap                                  <span class="c"># (or heapq.nlargest(k, nums) — stdlib!)</span></pre>
+  <div class="say">"A heap is the answer when I need <em>repeated access to the best remaining item</em> — top-k, merging k sorted lists, Dijkstra's frontier, schedulers." That sentence covers every heap question's opening.</div>
+  <div class="stop">A heap is NOT sorted — only the root is guaranteed. If you need full order, sort. If you need the k best of a stream, heap. heapify is O(n), a favorite trivia probe.</div>
+</div>
+
+<h2>4 · Queues, Stacks, Deques <span class="pill">highlighted</span></h2>
+<div class="sec">
+  <p style="font-size:.95rem; line-height:1.6"><b>Queue</b> (FIFO) → <code>collections.deque</code>, O(1) both ends — the engine of BFS (you tapped it in Night Sky ✦). <b>Stack</b> (LIFO) → a plain list (<code>append</code>/<code>pop</code>) — the engine of DFS, and recursion <em>is</em> an implicit stack. <b>Deque</b> → both at once; also the sliding-window-maximum trick (monotonic deque).</p>
+  <div class="stop">Never use <code>list.pop(0)</code> as a queue — it's O(n) per pop (everything shifts). <code>deque.popleft()</code> is the O(1) answer, and saying why is free credit.</div>
+</div>
+
+<h2>5 · Graphs: Complexity, Dijkstra, A* <span class="pill">highlighted — likely gap #2</span></h2>
+<div class="sec">
+  <table>
+    <tr><th>Thing</th><th>Cost</th><th>Note</th></tr>
+    <tr><td>Adjacency <b>list</b></td><td class="num">O(V + E) space</td><td>the default; neighbors in O(deg)</td></tr>
+    <tr><td>Adjacency <b>matrix</b></td><td class="num">O(V²) space</td><td>edge lookup O(1); only for dense/small graphs</td></tr>
+    <tr><td>BFS / DFS</td><td class="num">O(V + E)</td><td>every vertex + every edge once — say it exactly like that</td></tr>
+    <tr><td>Dijkstra (binary heap)</td><td class="num">O((V + E) log V)</td><td>weighted shortest path, <b>no negative edges</b></td></tr>
+    <tr><td>A*</td><td class="num">same worst case</td><td>Dijkstra + a heuristic pulling it toward the goal</td></tr>
+  </table>
+  <pre><span class="c"># Dijkstra = BFS where the queue becomes a MIN-HEAP keyed by distance (lazy-deletion style)</span>
+import heapq
+def dijkstra(graph, src):                        <span class="c"># graph[u] = [(v, weight), ...]</span>
+    dist = {src: 0}
+    heap = [(0, src)]                            <span class="c"># (distance so far, node)</span>
+    while heap:
+        d, u = heapq.heappop(heap)               <span class="c"># closest unfinished node</span>
+        if d > dist.get(u, float("inf")): continue   <span class="c"># stale entry — skip (lazy deletion)</span>
+        for v, w in graph[u]:
+            nd = d + w
+            if nd < dist.get(v, float("inf")):   <span class="c"># found a shorter way in</span>
+                dist[v] = nd
+                heapq.heappush(heap, (nd, v))
+    return dist</pre>
+  <p style="font-size:.95rem; line-height:1.6; margin-top:.4rem"><b>A* in one breath:</b> identical loop, but the heap is keyed by <code>d + h(v)</code>, where h estimates remaining distance. If h never <em>over</em>estimates ("admissible" — e.g., straight-line distance on a map), A* stays optimal and explores far less. Set h = 0 and A* <em>is</em> Dijkstra.</p>
+  <div class="say">The ladder: "unweighted → BFS. Weighted, non-negative → Dijkstra. Have a goal + a geometric hint → A*. Negative edges → Bellman-Ford." Pick by the problem's shape, say the ladder out loud.</div>
+  <div class="stop">#1 Dijkstra mistake: using it on unweighted graphs (BFS is simpler and faster) or with negative edges (silently wrong). #2: forgetting the stale-entry skip in the heap version.</div>
+</div>
+
+<h2>6 · NP-complete, in interview-sized portions</h2>
+<div class="sec">
+  <p style="font-size:.95rem; line-height:1.6">A problem where a proposed answer can be <b>verified</b> in polynomial time, but no polynomial-time <b>solver</b> is known — and all NP-complete problems reduce to each other, so cracking one cracks all. The guide's examples: <b>traveling salesman</b>, <b>knapsack</b> (its decision version). The delicious footnote you're equipped for: your 0/1 knapsack DP is O(nW) — <em>pseudo</em>-polynomial (polynomial in W's value, exponential in its bit-length), which is exactly how an NP-complete problem can still have a practical DP.</p>
+  <div class="say">"This looks NP-hard — so I'd ask about constraints: small n → bitmask/brute force; small budget → pseudo-polynomial DP; otherwise greedy or approximation and I'd say so explicitly." Recognizing intractability and pivoting is the senior answer; grinding on an exact algorithm is the junior one.</div>
+</div>
+
+<p class="lead" style="margin-top:2rem">CNNs → <a href="ml_fundamentals_slides.html">Fundamentals deck</a> slide 8 ("patterns are local &amp; repeat", AlexNet→ResNet) · SVMs → slide 7 (max margin, kernel trick, why they faded). Both already have hover cards in the 📚 database.</p>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+</body>
+</html>

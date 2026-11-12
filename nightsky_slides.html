@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Night Sky · Trees, Graphs & Lists, Gently</title>
+<style>
+  :root {
+    --bg:#0d1226; --panel:#161c36; --edge:#2b3458;
+    --ink:#eceef8; --dim:#9aa3c7;
+    --nk:#d9a441;                       /* topic accent: star gold */
+    --state:#8ea2ff; --trans:#ff8fab; --base:#5eead4;   /* trio, night-brightened */
+    --drop:#ffb454; --mono:"Cascadia Code","Consolas",monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{color:var(--ink);font-family:Georgia,serif;overflow:hidden;background:var(--bg);
+       background-image:radial-gradient(#8ea2ff22 1px, transparent 1.4px),
+                        radial-gradient(#d9a44118 1px, transparent 1.2px);
+       background-size:4.2vmin 4.2vmin, 7.3vmin 7.3vmin;
+       background-position:0 0, 2vmin 3vmin;}
+  .slide{display:none;width:100vw;height:100vh;padding:5vh 7vw 8rem;flex-direction:column;
+         justify-content:center;justify-content:safe center;position:relative;overflow-y:auto;}
+  .slide.active{display:flex;animation:rise .5s ease;}
+  @keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+  .slide::-webkit-scrollbar{width:11px;}
+  .slide::-webkit-scrollbar-track{background:#ffffff0a;border-radius:6px;}
+  .slide::-webkit-scrollbar-thumb{background:#d9a4414d;border-radius:6px;border:2px solid transparent;background-clip:content-box;}
+  .kicker{color:var(--nk);font-size:.95rem;letter-spacing:.3em;text-transform:uppercase;margin-bottom:1rem;font-weight:700;font-family:"Segoe UI",sans-serif;}
+  h1{font-size:2.8rem;line-height:1.25;max-width:34ch;font-weight:700;}
+  h2{font-size:1.8rem;line-height:1.35;margin-bottom:1rem;max-width:46ch;font-weight:700;}
+  .sub{color:var(--dim);font-size:1.08rem;margin-top:.9rem;max-width:72ch;line-height:1.6;font-family:"Segoe UI",sans-serif;}
+  .st{color:var(--state);font-weight:700;}.tr{color:var(--trans);font-weight:700;}.bc{color:var(--base);font-weight:700;}
+  .beat{display:none;margin:.55rem 0;max-width:78ch;font-family:"Segoe UI",sans-serif;}
+  .beat.on{display:block;animation:rise .45s ease;}
+  .beat.coach{background:#1a2142;border:1px solid #30406e;border-left:4px solid var(--nk);border-radius:0 12px 12px 12px;
+              padding:.8rem 1.15rem;font-size:1.08rem;line-height:1.6;}
+  .beat.coach::before{content:"✦ coach · ";color:var(--nk);font-weight:700;font-size:.85rem;letter-spacing:.08em;}
+  .beat.you{border:2px dashed #3b4466;border-radius:12px 0 12px 12px;padding:.7rem 1.15rem;font-size:1rem;
+            color:var(--dim);font-style:italic;margin-left:3rem;}
+  .beat.you::before{content:"you · ";color:var(--nk);font-weight:700;font-style:normal;font-size:.85rem;}
+  .beat.reveal{background:#12303a;border:1.5px solid var(--base);border-radius:12px;padding:.8rem 1.15rem;font-size:1.05rem;line-height:1.6;}
+  .beat.reveal b{color:var(--base);}
+  .beatHint{position:fixed;bottom:2.9rem;left:50%;transform:translateX(-50%);color:#9aa3c7;font-size:.85rem;
+            font-family:"Segoe UI",sans-serif;background:#0d1226cc;padding:.2rem .9rem;border-radius:999px;
+            border:1px solid #2b3458;backdrop-filter:blur(3px);z-index:40;}
+  pre{background:#090d1c;color:#e8ecf1;border-radius:10px;padding:.9rem 1.2rem;font-family:var(--mono);
+      font-size:.92rem;line-height:1.6;overflow-x:auto;max-width:840px;margin-top:.5rem;border:1px solid #232b4c;}
+  pre .cst{color:#a5b4fc;}pre .ctr{color:#fda4af;}pre .cbc{color:#5eead4;}pre .cmt{color:#707aa0;}
+  table{border-collapse:collapse;font-size:1rem;width:100%;max-width:900px;font-family:"Segoe UI",sans-serif;}
+  th{text-align:left;color:var(--dim);font-weight:600;padding:.45rem 1rem .45rem 0;border-bottom:2px solid var(--edge);}
+  td{padding:.5rem 1rem .5rem 0;border-bottom:1px solid #1d2546;}
+  td.num{font-family:var(--mono);color:var(--nk);white-space:nowrap;}
+  /* constellation canvas */
+  .sky{position:relative;background:linear-gradient(180deg,#0a0f22,#121a3a);border:1px solid var(--edge);
+       border-radius:16px;width:fit-content;margin-top:.6rem;box-shadow:inset 0 0 60px #0006;}
+  .sky svg{display:block;}
+  .edgeline{stroke:#3d4a7e;stroke-width:1.6;stroke-dasharray:3 4;}
+  .starnode{cursor:pointer;}
+  .starnode path{fill:#cfd6f5;transition:fill .3s, filter .3s;}
+  .starnode text{fill:#0d1226;font-family:"Segoe UI",sans-serif;font-weight:700;font-size:13px;pointer-events:none;}
+  .starnode .halo{fill:none;stroke:transparent;stroke-width:2;}
+  .starnode.lit path{fill:var(--base);filter:drop-shadow(0 0 7px #5eead4aa);}
+  .starnode.lit2 path{fill:var(--trans);filter:drop-shadow(0 0 7px #ff8fabaa);}
+  .starnode.bad{animation:shake .4s;}
+  .starnode.bad path{fill:#e86b7f;}
+  @keyframes shake{25%{transform:translateX(-4px);}50%{transform:translateX(4px);}75%{transform:translateX(-3px);}}
+  .orderbadge{fill:var(--nk);font-family:var(--mono);font-size:12px;font-weight:700;}
+  .skybtn{margin:.6rem .4rem 0 0;font-family:"Segoe UI",sans-serif;font-size:.88rem;color:var(--dim);
+          background:var(--panel);border:1px solid var(--edge);border-radius:4px;padding:.35rem .9rem;cursor:pointer;}
+  .skybtn:hover{border-color:var(--nk);color:var(--nk);}
+  .skymsg{font-family:"Segoe UI",sans-serif;font-size:.95rem;margin-top:.5rem;min-height:1.3rem;color:var(--dim);}
+  /* linked list */
+  .lrow{display:flex;align-items:center;gap:.4rem;margin-top:.6rem;flex-wrap:wrap;}
+  .lnode{position:relative;width:64px;height:64px;}
+  .lnode svg{width:100%;height:100%;}
+  .lnode .lab{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+              font-family:var(--mono);font-weight:700;color:#0d1226;font-size:.95rem;}
+  .ptr{font-size:1.6rem;color:#3d4a7e;transition:transform .5s, color .5s;font-family:var(--mono);}
+  .ptr.flipped{transform:rotate(180deg);color:var(--trans);}
+  .ptag{position:absolute;top:-1.3rem;left:50%;transform:translateX(-50%);font-family:var(--mono);
+        font-size:.72rem;color:var(--nk);white-space:nowrap;}
+  .star{position:absolute;pointer-events:none;animation:twinkle var(--twdur,3.4s) ease-in-out var(--twdel,0s) infinite;}
+  .star path{fill:var(--starcol,#d9a441);opacity:.5;}
+  @keyframes twinkle{0%,100%{transform:scale(1) rotate(0);opacity:.45;}50%{transform:scale(1.16) rotate(6deg);opacity:.9;}}
+  .notes{position:fixed;bottom:0;left:0;right:0;background:#070a18f5;border-top:2px solid var(--nk);padding:1rem 7vw;
+         font-size:1rem;color:#dfe3ea;line-height:1.5;display:none;max-height:38vh;overflow:auto;font-family:"Segoe UI",sans-serif;}
+  body.show-notes .notes.active-note{display:block;}
+  .hud{position:fixed;top:1rem;right:1.4rem;color:#4a5680;font-family:var(--mono);font-size:.85rem;}
+  .hint{position:fixed;bottom:1rem;left:1.4rem;color:#4a5680;font-size:.85rem;font-family:"Segoe UI",sans-serif;
+        background:#0d1226cc;padding:.2rem .7rem;border-radius:999px;z-index:40;}
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">✦ Night Sky · Trees, Graphs &amp; Lists, Gently</div>
+  <h1>Every node is a <span style="color:var(--nk)">star</span>.<br>Every pointer, a line between them.</h1>
+  <p class="sub">A coached walk through the structures that carry half of all coding interviews — and this time <b>you touch the sky</b>: the coach will ask you to click stars in traversal order, flip pointers with your own hands, and watch two search strategies race. Audio room lives bottom-right, as always.</p>
+</section>
+<div class="notes">Night theme chosen because the content IS constellations: nodes and edges. The trio colors are night-brightened but semantically identical (state indigo, transition rose, base teal). Interactives validate input — correct taps glow teal, wrong taps shake red — retrieval practice with immediate feedback.</div>
+
+<!-- 2 LINKED LIST -->
+<section class="slide">
+  <div class="kicker">First Constellation · The Linked List</div>
+  <h2>Reverse a linked list — by hand, pointer by pointer.</h2>
+  <div class="beat coach" data-say="Here is a little chain of five stars. Each one knows only its next neighbor — that is the whole deal with linked lists: no indexing, just following arrows. The classic exercise is to reverse it. Press the flip button and watch what one step really does.">
+    Five stars, each knowing only its <b>next</b>. To reverse the chain, we re-aim one arrow at a time. Press <b>⟲ flip next pointer</b> — slowly — and narrate what each flip does.</div>
+  <div class="lrow" id="llist"></div>
+  <button class="skybtn" id="llFlip">⟲ flip next pointer</button>
+  <button class="skybtn" id="llReset">↺ reset</button>
+  <div class="skymsg" id="llMsg">prev = None · curr = A</div>
+  <div class="beat reveal" data-say="Each flip is the same three-line dance: remember the next node, aim current's arrow backward at prev, then walk prev and current one step forward. Three assignments, repeated n times. O of n time, O of one space.">
+    Every flip is the same 3-line dance: <b>remember next → aim curr backward → walk forward</b>.
+    <pre>def reverse(head):
+    prev = None                          <span class="cmt"># the already-reversed part (behind you)</span>
+    curr = head
+    while curr:
+        next_node  = curr.next           <span class="cmt"># ① remember the road ahead</span>
+        <span class="ctr">curr.next  = prev</span>                <span class="cmt"># ② the flip you just clicked</span>
+        prev, curr = curr, next_node     <span class="cmt"># ③ walk forward one star</span>
+    return prev                          <span class="cmt"># prev ends as the new head · O(n)/O(1)</span></pre></div>
+</section>
+<div class="notes">The three-pointer dance (prev/curr/next_node) is THE linked-list interview answer; forgetting to save next_node before the flip is the classic bug (you orphan the rest of the chain). Variants to mention: reverse between positions m..n, reverse in k-groups — same dance with bookkeeping. Lists vs arrays: O(1) insert/delete given the node, O(n) access — opposite trade of arrays.</div>
+
+<!-- 3 BFS GAME -->
+<section class="slide">
+  <div class="kicker">Second Constellation · The Tree</div>
+  <h2>Now you fly the traversal: tap the stars in BFS order.</h2>
+  <div class="beat coach" data-say="A tree: one root, no cycles, every star reachable by exactly one path. Breadth-first search explores it level by level, like ripples. Your turn to BE the algorithm: tap the stars in the exact order B F S would visit them, starting from the root.">
+    One root ✦, no cycles, one path to every star. <b>BFS</b> explores level by level — ripples, not dives. <b>Your turn to be the algorithm</b>: tap the stars in BFS visit order, root first. (Within a level, left to right.)</div>
+  <div class="sky" id="skyTree"></div>
+  <button class="skybtn" id="bfsReset">↺ start over</button>
+  <div class="skymsg" id="bfsMsg">tap the root when ready…</div>
+  <div class="beat reveal" data-say="The machinery under your taps is a queue. Visit a star, enqueue its children, always serve the oldest star waiting. First in, first out — that is all B F S is.">
+    The machinery under your taps is a <b>queue</b> (FIFO): visit a star → enqueue its children → always serve the <em>oldest</em> waiting star.
+    <pre>from collections import deque
+def bfs(root):
+    <span class="cbc">queue = deque([root])</span>                <span class="cmt"># the ripple front</span>
+    while queue:
+        star = queue.popleft()           <span class="cmt"># oldest waiting star (FIFO!)</span>
+        visit(star)
+        <span class="ctr">queue.extend(star.children)</span>      <span class="cmt"># next ripple joins the back</span></pre></div>
+</section>
+<div class="notes">Expected tap order A,B,C,D,E,F,G (level order, left→right). Teal glow + numbered badge on correct, red shake on wrong — kinesthetic retrieval practice. Vocabulary to drop while tapping: root, leaf, depth/level, height; BFS finds shortest paths in UNWEIGHTED graphs (the #1 reason to choose it); swap the deque for a plain stack/pop() and the identical code becomes DFS — next slide.</div>
+
+<!-- 4 DFS VS BFS -->
+<section class="slide">
+  <div class="kicker">Two Ways to Wander</div>
+  <h2>Same sky, two temperaments: the diver and the rippler.</h2>
+  <div class="beat coach" data-say="Watch them race. Depth first dives down a whole branch before backtracking — rose. Breadth first ripples outward level by level — teal. Play them both, twice. Notice WHERE each one is at step four.">
+    Watch them wander. <span class="tr">DFS dives</span> (a whole branch, then backtrack); <span class="bc">BFS ripples</span> (level by level). Play both — notice <b>where each is at step 4</b>.</div>
+  <div class="sky" id="skyRace"></div>
+  <div><button class="skybtn" id="raceDfs">▶ DFS (rose · stack)</button>
+  <button class="skybtn" id="raceBfs">▶ BFS (teal · queue)</button></div>
+  <div class="beat reveal" data-say="The whole choice in one breath: B F S when the answer is about distance or the nearest something — it visits in order of distance. D F S when the answer is about paths, subtrees, or exhausting possibilities — and it is just recursion, the call stack is the stack.">
+    The whole choice, one breath: <b class="bc">BFS = nearest/shortest</b> anything (unweighted) — it visits in distance order. <b class="tr">DFS = paths, subtrees, exhaustive exploration</b> — and recursion <em>is</em> DFS: the call stack is the stack.
+    <table style="margin-top:.6rem">
+      <tr><th></th><th>BFS</th><th>DFS</th></tr>
+      <tr><td>engine</td><td class="num">queue (FIFO)</td><td class="num">stack / recursion (LIFO)</td></tr>
+      <tr><td>finds first</td><td>closest things</td><td>deepest things</td></tr>
+      <tr><td>memory</td><td class="num">O(widest level)</td><td class="num">O(deepest path)</td></tr>
+      <tr><td>classic uses</td><td>shortest unweighted path, levels</td><td>cycles, topo sort, backtracking, tree DP</td></tr>
+    </table></div>
+</section>
+<div class="notes">DFS preorder here: A,B,D,E,C,F,G; BFS: A,B,C,D,E,F,G — at step 4 DFS is deep at E while BFS is still wide at D: that snapshot IS the difference. Bridge to the DP series: tree DP (Part 3 preview) runs on DFS post-order — children's answers before the parent's, which is just tabulation order on a tree. Both are O(V+E) time.</div>
+
+<!-- 5 CLOSE -->
+<section class="slide">
+  <div class="kicker">✦ Night Sky · Rest</div>
+  <h1 style="font-size:2.1rem">Lists are chains, trees are hierarchies, graphs are anything —<br>and two wanderers cover them all.</h1>
+  <p class="sub">The recall card: reverse-a-list is the <b>3-line pointer dance</b> · BFS = <b class="bc">queue, ripples, nearest-first</b> · DFS = <b class="tr">stack/recursion, dives, paths-and-subtrees</b> · both O(V+E) · pick by the question's shape: "shortest/nearest?" → BFS; "exists a path / count ways / exhaust?" → DFS.</p>
+  <p class="sub">The constellations will keep twinkling. Go rest your eyes — Thursday needs them sharp.</p>
+</section>
+<div class="notes">Scope note: this covers the structural vocabulary + the two traversals, which with the DP series covers the bulk of L4 coding-round patterns. Deliberately NOT covered (post-interview material): weighted shortest paths (Dijkstra), union-find, heaps — unless she asks before Thursday.</div>
+
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">→ next thought · ← previous · N notes · 🎛 audio bottom-right</div>
+<div class="beatHint" id="beatHint">→ for the next thought…</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+function mulberry32(s){return function(){s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const STARPATH="M0,-22 L3.2,-3.2 L22,0 L3.2,3.2 L0,22 L-3.2,3.2 L-22,0 L-3.2,-3.2 Z";
+
+/* ---------- background starbursts ---------- */
+function sprinkleStars(section,n,rng){for(let k=0;k<n;k++){const s=document.createElement("span");s.className="star";
+  const sz=12+rng()*26;
+  s.style.cssText=`left:${6+rng()*88}%;top:${5+rng()*34}%;width:${sz}px;height:${sz}px;--twdur:${(2.6+rng()*2.6).toFixed(2)}s;--twdel:${(-rng()*4).toFixed(2)}s;--starcol:${rng()<.6?"#d9a441":"#8ea2ff"}`;
+  s.innerHTML=`<svg viewBox="-50 -50 100 100" width="100%" height="100%"><path d="M0,-46 L6.5,-6.5 L46,0 L6.5,6.5 L0,46 L-6.5,6.5 L-46,0 L-6.5,-6.5 Z"/></svg>`;
+  section.appendChild(s);}}
+const srng=mulberry32(1105);
+sprinkleStars(slides[0],8,srng); sprinkleStars(slides[slides.length-1],8,srng);
+
+/* ---------- linked list reversal ---------- */
+const LL=["A","B","C","D","E"];
+let llStep=0;
+function renderLL(){
+  const row=document.getElementById("llist"); row.innerHTML="";
+  LL.forEach((lab,k)=>{
+    const n=document.createElement("div"); n.className="lnode";
+    n.innerHTML=`<svg viewBox="-26 -26 52 52"><path d="${STARPATH}" fill="#cfd6f5"/></svg><span class="lab">${lab}</span>`;
+    if(k===llStep) n.insertAdjacentHTML("beforeend",`<span class="ptag">curr</span>`);
+    if(k===llStep-1) n.insertAdjacentHTML("beforeend",`<span class="ptag">prev</span>`);
+    row.appendChild(n);
+    if(k<LL.length-1){
+      const p=document.createElement("span"); p.className="ptr"+(k<llStep?" flipped":""); p.textContent="➜";
+      row.appendChild(p);
+    }
+  });
+  document.getElementById("llMsg").textContent =
+    llStep===0 ? "prev = None · curr = A — nothing flipped yet"
+    : llStep<LL.length ? `flipped ${LL[llStep-1]}'s arrow backward · prev = ${LL[llStep-1]} · curr = ${LL[llStep]}`
+    : "done — every arrow re-aimed; prev = E is the new head ✦";
+}
+document.getElementById("llFlip").addEventListener("click",()=>{ if(llStep<LL.length) llStep++; renderLL(); });
+document.getElementById("llReset").addEventListener("click",()=>{ llStep=0; renderLL(); });
+renderLL();
+
+/* ---------- constellation builder ---------- */
+const NODES=[["A",280,45],["B",160,125],["C",400,125],["D",90,215],["E",230,215],["F",330,215],["G",470,215]];
+const EDGES=[[0,1],[0,2],[1,3],[1,4],[2,5],[2,6]];
+function buildSky(id){
+  const holder=document.getElementById(id);
+  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.setAttribute("width",560); svg.setAttribute("height",270); holder.appendChild(svg);
+  EDGES.forEach(([a,b])=>{ const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+    l.setAttribute("x1",NODES[a][1]); l.setAttribute("y1",NODES[a][2]);
+    l.setAttribute("x2",NODES[b][1]); l.setAttribute("y2",NODES[b][2]);
+    l.setAttribute("class","edgeline"); svg.appendChild(l); });
+  return NODES.map(([lab,x,y],idx)=>{
+    const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+    g.setAttribute("class","starnode"); g.setAttribute("transform",`translate(${x},${y})`); g.dataset.idx=idx;
+    g.innerHTML=`<circle class="halo" r="26"></circle><path d="${STARPATH}"></path><text text-anchor="middle" dy="4">${lab}</text>`;
+    svg.appendChild(g); return g; });
+}
+
+/* ---------- BFS tap game ---------- */
+const bfsOrder=[0,1,2,3,4,5,6];           // A B C D E F G (level order)
+let bfsAt=0;
+const treeStars=buildSky("skyTree");
+function bfsBadge(g,n){ const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+  t.setAttribute("class","orderbadge"); t.setAttribute("x",20); t.setAttribute("y",-16); t.textContent=n;
+  g.appendChild(t); }
+treeStars.forEach(g=>g.addEventListener("click",()=>{
+  const idx=+g.dataset.idx;
+  if(idx===bfsOrder[bfsAt]){ g.classList.add("lit"); bfsBadge(g,++bfsAt);
+    document.getElementById("bfsMsg").textContent =
+      bfsAt===bfsOrder.length ? "✦ perfect flight — that's level-order. You just WERE a queue." :
+      `yes — ${NODES[idx][0]} is visit #${bfsAt}. Next ripple…`;
+  } else { g.classList.add("bad"); setTimeout(()=>g.classList.remove("bad"),450);
+    document.getElementById("bfsMsg").textContent =
+      `not yet — BFS finishes a whole level before descending. Who's still waiting in the queue?`; }
+}));
+document.getElementById("bfsReset").addEventListener("click",()=>{ bfsAt=0;
+  treeStars.forEach(g=>{ g.classList.remove("lit"); g.querySelectorAll(".orderbadge").forEach(b=>b.remove()); });
+  document.getElementById("bfsMsg").textContent="tap the root when ready…"; });
+
+/* ---------- DFS vs BFS race ---------- */
+const raceStars=buildSky("skyRace");
+let raceTimers=[];
+function runRace(order, cls){
+  raceTimers.forEach(clearTimeout); raceTimers=[];
+  raceStars.forEach(g=>{ g.classList.remove("lit","lit2"); g.querySelectorAll(".orderbadge").forEach(b=>b.remove()); });
+  order.forEach((idx,k)=>raceTimers.push(setTimeout(()=>{
+    raceStars[idx].classList.add(cls); bfsBadgeRace(raceStars[idx],k+1); },400+k*650)));
+}
+function bfsBadgeRace(g,n){ const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+  t.setAttribute("class","orderbadge"); t.setAttribute("x",20); t.setAttribute("y",-16); t.textContent=n; g.appendChild(t); }
+document.getElementById("raceDfs").addEventListener("click",()=>runRace([0,1,3,4,2,5,6],"lit2"));
+document.getElementById("raceBfs").addEventListener("click",()=>runRace([0,1,2,3,4,5,6],"lit"));
+
+/* ---------- beats + nav (voice via shared CalmAudio) ---------- */
+const beatShown=slides.map(()=>0);
+function syncBeats(idx){ const bs=[...slides[idx].querySelectorAll(".beat")];
+  bs.forEach((b,k)=>b.classList.toggle("on",k<beatShown[idx]));
+  document.getElementById("beatHint").style.display=beatShown[idx]<bs.length?"block":"none"; }
+function fireBeat(idx){ const bs=slides[idx].querySelectorAll(".beat"), b=bs[beatShown[idx]-1]; if(!b) return;
+  if(b.dataset.say && window.CalmAudio) CalmAudio.Voice.speak(b.dataset.say); }
+let i=0;
+function show(n){ window.CalmAudio&&CalmAudio.Voice.stop();
+  i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length;
+  if(slides[i].querySelectorAll(".beat").length && beatShown[i]===0){ beatShown[i]=1; fireBeat(i); }
+  syncBeats(i); }
+function advance(){ const bs=slides[i].querySelectorAll(".beat");
+  if(beatShown[i]<bs.length){ beatShown[i]++; syncBeats(i); fireBeat(i); return; } show(i+1); }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown') advance();
+  else if(e.key==='ArrowLeft'||e.key==='PageUp') show(i-1);
+  else if(e.key.toLowerCase()==='n') document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f') document.documentElement.requestFullscreen?.();
+});
+show(0);
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

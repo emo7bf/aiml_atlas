@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Name-Drop Database</title>
+<style>
+  :root { --bg:#14161c; --panel:#1c1f28; --edge:#2b2f3d; --ink:#e9ecf3; --dim:#99a1b5; --drop:#ffb454; --mono:Consolas,monospace; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); font-family:"Segoe UI",system-ui,sans-serif; padding:5rem 6vw 4rem;
+         background-image: repeating-radial-gradient(circle at 50% 130%, rgba(255,180,84,.05) 0 1px, transparent 1px 5vmin); }
+  h1 { font-size:2rem; margin-bottom:.4rem; } .lead { color:var(--dim); margin-bottom:1.6rem; }
+  #q { width:100%; max-width:480px; background:var(--panel); border:1px solid var(--edge); border-radius:10px;
+       color:var(--ink); padding:.7rem 1rem; font-size:1rem; margin-bottom:2rem; }
+  h2.cat { color:var(--drop); font-size:1.05rem; text-transform:uppercase; letter-spacing:.2em; margin:2.2rem 0 1rem; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(360px,1fr)); gap:1rem; }
+  .card { background:var(--panel); border:1px solid var(--edge); border-radius:12px; padding:1.1rem 1.3rem; }
+  .card h3 { color:var(--drop); font-size:1.1rem; margin-bottom:.5rem; font-family:var(--mono); }
+  .card p { font-size:.88rem; line-height:1.5; color:#ccd2e0; margin-bottom:.45rem; }
+  .card b { color:var(--ink); font-weight:600; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<h1>📚 Name-Drop Database</h1>
+<p class="lead">Every interview-ready term across the decks — what it is, why it matters, and what the alternatives are. Type to filter.</p>
+<input id="q" placeholder="filter… e.g. 'google', 'bandwidth', 'nvidia'">
+<div id="list"></div>
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const byCat = {};
+for (const [k, d] of Object.entries(NAMEDROPS)) (byCat[d.category] ??= []).push(d);
+const list = document.getElementById("list");
+for (const cat of Object.keys(byCat).sort()) {
+  const h = document.createElement("h2"); h.className = "cat"; h.textContent = cat + " (" + byCat[cat].length + ")";
+  const g = document.createElement("div"); g.className = "grid";
+  for (const d of byCat[cat].sort((a,b)=>a.name.localeCompare(b.name))) {
+    const c = document.createElement("div"); c.className = "card";
+    c.innerHTML = `<h3>${d.name}</h3><p><b>What:</b> ${d.what}</p><p><b>Why it matters:</b> ${d.why}</p><p><b>Alternatives:</b> ${d.alt}</p>`;
+    g.appendChild(c);
+  }
+  list.appendChild(h); list.appendChild(g);
+}
+document.getElementById("q").addEventListener("input", e => {
+  const t = e.target.value.toLowerCase();
+  document.querySelectorAll(".card").forEach(c => c.classList.toggle("hidden", !c.textContent.toLowerCase().includes(t)));
+  document.querySelectorAll("h2.cat").forEach(h => {
+    const g = h.nextElementSibling;
+    const any = [...g.children].some(c => !c.classList.contains("hidden"));
+    h.classList.toggle("hidden", !any); g.classList.toggle("hidden", !any);
+  });
+});
+</script>
+</body>
+</html>

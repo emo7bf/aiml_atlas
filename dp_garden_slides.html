@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The DP Garden · Guided Reps</title>
+<style>
+  :root {
+    /* Series identity, Dojo variation: SAGE paper (P1 cream · P2 blueprint · Dojo sage) */
+    --bg: #f1f7f0; --panel: #ffffff; --edge: #cfdccd;
+    --ink: #20242e; --dim: #68706a;
+    --dp: #c2410c;
+    --state: #4338ca; --trans: #be123c; --base: #0d9488;   /* series-constant trio */
+    --drop: #9a6700;
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { color:var(--ink); font-family:Georgia, serif; overflow:hidden; background:var(--bg);
+         background-image: linear-gradient(#c8dbc6a0 1px, transparent 1px),
+                           linear-gradient(90deg, #c8dbc6a0 1px, transparent 1px);
+         background-size: 4vmin 4vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:5vh 7vw 7rem; flex-direction:column;
+           justify-content:center; justify-content:safe center; overflow-y:auto; }
+  .slide.active { display:flex; animation: rise .45s ease; }
+  .slide::-webkit-scrollbar { width:11px; }
+  .slide::-webkit-scrollbar-track { background:#0000000a; border-radius:6px; }
+  .slide::-webkit-scrollbar-thumb { background:#c2410c4d; border-radius:6px; border:2px solid transparent; background-clip:content-box; }
+  @keyframes rise { from { opacity:0; transform:translateY(16px);} to { opacity:1; transform:none;} }
+  .kicker { color:var(--dp); font-size:.95rem; letter-spacing:.3em; text-transform:uppercase; margin-bottom:1rem;
+            font-weight:700; font-family:"Segoe UI", sans-serif; }
+  h1 { font-size:2.9rem; line-height:1.2; max-width:34ch; font-weight:700; }
+  h2 { font-size:1.9rem; line-height:1.3; margin-bottom:1.2rem; max-width:44ch; font-weight:700; }
+  .sub { color:var(--dim); font-size:1.12rem; margin-top:1rem; max-width:72ch; line-height:1.6; font-family:"Segoe UI", sans-serif; }
+  .cols { display:flex; gap:1.6rem; align-items:flex-start; }
+  .col { flex:1; }
+  .card { background:var(--panel); border-radius:12px; padding:1.2rem 1.4rem; border:1px solid var(--edge); box-shadow:2px 3px 0 #0001; }
+  .card h3 { font-size:1.08rem; margin-bottom:.45rem; }
+  .card p { color:var(--dim); font-size:.97rem; line-height:1.55; font-family:"Segoe UI", sans-serif; }
+  .st { color:var(--state); font-weight:700; } .tr { color:var(--trans); font-weight:700; } .bc { color:var(--base); font-weight:700; }
+  .qbox { background:#fff8ee; border:2px dashed var(--dp); border-radius:12px; padding:1.3rem 1.6rem;
+          font-size:1.3rem; line-height:1.6; max-width:76ch; font-family:"Segoe UI", sans-serif; }
+  .qbox b { color:var(--dp); }
+  pre { background:#20242e; color:#e8ecf1; border-radius:10px; padding:1rem 1.3rem; font-family:var(--mono);
+        font-size:.95rem; line-height:1.6; overflow-x:auto; max-width:860px; min-height:2rem; }
+  pre .cst{color:#a5b4fc;} pre .ctr{color:#fda4af;} pre .cbc{color:#5eead4;} pre .cmt{color:#8b95a7;}
+  pre .chg { background:#be123c44; border-radius:3px; padding:0 2px; }
+  .caret::after { content:"▌"; color:#ffb454; animation: blink .8s infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+  .dpgrid { display:grid; gap:3px; width:fit-content; margin-top:.3rem; }
+  .dpcell { min-width:3.2rem; height:2.9rem; display:flex; align-items:center; justify-content:center; gap:.15rem;
+            font-family:var(--mono); font-size:.95rem; background:var(--panel); border:1px solid var(--edge);
+            border-radius:4px; opacity:0; transform:translateY(10px) scale(.92); transition:opacity .4s, transform .4s; padding:0 .3rem; }
+  .dpcell.on { opacity:1; transform:none; }
+  .dpcell.hdr { background:transparent; border:none; color:var(--dim); font-size:1.3rem; }
+  .dpcell.b { background:#d6f3ee; border-color:var(--base); color:#0b5e55; font-weight:700; }
+  .dpcell.v { background:#e7e6fb; border-color:var(--state); color:var(--state); }
+  .dpcell.hl { background:#fbdce3; border-color:var(--trans); color:var(--trans); font-weight:700; box-shadow:0 0 0 2px #be123c33; }
+  .dpcell.x { background:#efefef; color:#999; }
+  .btn { margin-top:.7rem; font-family:"Segoe UI",sans-serif; font-size:.88rem; color:var(--dim);
+         background:var(--panel); border:1px solid var(--edge); border-radius:4px; padding:.35rem .9rem; cursor:pointer; }
+  /* ---- the pond: procedurally-grown lily pads, bobbing on the water ---- */
+  .pond { position:relative; display:flex; align-items:flex-end; gap:1.6vmin; padding:2.2rem .8rem 2.6rem;
+          background: linear-gradient(180deg, #dcefe9 0%, #c8e4e6 60%, #badbe2 100%);
+          border-radius:16px; border:1px solid #b7d4cf; box-shadow: inset 0 6px 18px #ffffff80, inset 0 -10px 22px #9ec4c230;
+          width:fit-content; }
+  .pad-wrap { position:relative; display:flex; flex-direction:column; align-items:center;
+              animation: bob var(--bobdur,4s) ease-in-out var(--bobdel,0s) infinite; }
+  @keyframes bob { 0%,100% { transform: translateY(0) rotate(0deg); }
+                   35%     { transform: translateY(-5px) rotate(-1.6deg); }
+                   70%     { transform: translateY(2px) rotate(1.1deg); } }
+  .pad-wrap::after { content:""; position:absolute; bottom:-10px; width:72%; height:10px; border-radius:50%;
+          background: radial-gradient(ellipse, #7fb4ae55 0%, transparent 70%);
+          animation: rippleb var(--bobdur,4s) ease-in-out var(--bobdel,0s) infinite; }
+  @keyframes rippleb { 0%,100% { transform:scaleX(1); opacity:.7; } 35% { transform:scaleX(.82); opacity:.45; } 70% { transform:scaleX(1.08); opacity:.8; } }
+  .pad-wrap svg { filter: drop-shadow(0 3px 3px #4a6e5533); }
+  .chip { position:absolute; top:34%; font-family:var(--mono); font-weight:700; font-size:1rem; padding:.1rem .55rem;
+          border-radius:999px; border:1.5px solid; background:#ffffffee; opacity:0; transform:translateY(8px) scale(.8);
+          transition: opacity .45s ease, transform .45s ease; }
+  .chip.on { opacity:1; transform:none; }
+  .chip.b { color:#0b5e55; border-color:var(--base); } .chip.v { color:var(--state); border-color:var(--state); }
+  .chip.hl { color:var(--trans); border-color:var(--trans); box-shadow:0 0 0 3px #be123c22; }
+  .padlabel { margin-top:.9rem; font-family:"Segoe UI",sans-serif; font-size:.78rem; color:#5d7a74; text-align:center; }
+  /* toll-hop arcs: the two candidate hops INTO each pad; cheaper one wins */
+  .pondsvg { position:absolute; inset:0; pointer-events:none; overflow:visible; }
+  .hoparc { fill:none; stroke-width:2.5; stroke-linecap:round; stroke-dasharray:1; stroke-dashoffset:1;
+            transition: stroke-dashoffset .55s ease, opacity .4s; }
+  .hoparc.draw { stroke-dashoffset:0; }
+  .hoparc.win { stroke:var(--trans); }
+  .hoparc.lose { stroke:#8fa6a0; opacity:.45; stroke-width:1.8; }
+  /* answer banner + the four gears */
+  .abox { background:#e9f6f1; border:2px solid var(--base); border-radius:10px; padding:.8rem 1.2rem;
+          font-size:1.1rem; font-family:"Segoe UI",sans-serif; margin-bottom:1rem; max-width:80ch; }
+  .abox b { color:#0b5e55; }
+  .gears { display:flex; gap:.8rem; margin-top:1rem; font-family:"Segoe UI",sans-serif; max-width:1000px; }
+  .gear { flex:1; background:var(--panel); border:1px solid var(--edge); border-radius:8px; padding:.6rem .8rem; font-size:.82rem;
+          color:var(--dim); line-height:1.45; }
+  .gear b { display:block; color:var(--ink); font-size:.86rem; margin-bottom:.15rem; }
+  .gear.shown { border-color:var(--dp); box-shadow:0 0 0 2px #c2410c22; }
+  .gear.shown b { color:var(--dp); }
+  /* ---- atomic-age four-pointed starbursts ---- */
+  .slide { position:relative; }
+  .star { position:absolute; pointer-events:none; animation: twinkle var(--twdur,3.4s) ease-in-out var(--twdel,0s) infinite; }
+  .star path { fill:var(--starcol, #d9a441); opacity:.5; }
+  .star .dot { fill:var(--starcol, #d9a441); opacity:.35; }
+  @keyframes twinkle { 0%,100% { transform: scale(1) rotate(0deg); opacity:.55; }
+                       50%     { transform: scale(1.18) rotate(6deg); opacity:.95; } }
+  .btn:hover { border-color:var(--dp); color:var(--dp); }
+  .rep { display:inline-block; background:var(--dp); color:#fff; border-radius:4px; padding:.15rem .7rem;
+         font-family:"Segoe UI",sans-serif; font-size:.85rem; margin-right:.6rem; }
+  .nd { color:var(--drop); border-bottom:1px dashed var(--drop); cursor:help; font-family:var(--mono); font-size:.95em; }
+  #tip { position:fixed; z-index:50; max-width:480px; background:#fffdf4; border:1.5px solid var(--drop); border-radius:12px;
+         padding:1rem 1.2rem; font-size:.92rem; line-height:1.5; display:none; box-shadow:0 12px 40px #00000030; font-family:"Segoe UI",sans-serif; }
+  #tip .t-name{color:var(--drop);font-weight:700;} #tip .t-cat{color:var(--dim);font-size:.78rem;margin-left:.6rem;}
+  #tip .t-row{margin-top:.5rem;color:#3c4048;} #tip .t-row b{color:var(--dp);}
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#20242ef5; border-top:2px solid var(--dp); padding:1rem 7vw;
+           font-size:1rem; color:#dfe3ea; line-height:1.5; display:none; max-height:38vh; overflow:auto; font-family:"Segoe UI",sans-serif; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#9fae9c; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#9fae9c; font-size:.85rem; font-family:"Segoe UI",sans-serif; }
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">🌿 The DP Garden · Guided Reps</div>
+  <h1>Six reps. Each one: a <span class="tr">question</span>, a breath,<br>then the <span class="st">answer builds itself</span>.</h1>
+  <p class="sub">Rules of the garden: every <b>Q slide</b> poses a problem — actually try it (out loud, like the real room) before advancing. The <b>A slide</b> then draws the table, types the code the way you'd narrate it to an interviewer, and names the instinct you just used. Difficulty climbs from frog to boss-fight.</p>
+  <p class="sub"><span class="st">STATE indigo</span> · <span class="tr">TRANSITION rose</span> · <span class="bc">BASE teal</span> — the series colors, as always. New paper color so Parts 1, 2, and the Dojo stay separate in your memory: <b>cream → blueprint → sage</b>.</p>
+</section>
+<div class="notes">Pedagogy: retrieval practice (attempt before reveal) beats re-reading by a wide margin — that's why answers are physically on the NEXT slide. Coach her to say the 5-step recipe aloud at each Q slide: state sentence, transition, base, order, answer+cost.</div>
+
+<!-- 2 REP 1 Q -->
+<section class="slide">
+  <div class="kicker"><span class="rep">REP 1 · dummies</span> Frog Pond</div>
+  <div class="qbox">🐸 A frog starts on pad 0 and hops <b>+1 or +2 pads</b> at a time.<br><br>
+  <b>Q: How many distinct hop-sequences reach pad 4?</b><br><br>
+  Before advancing, say out loud: the <span class="st">state sentence</span>, the <span class="tr">transition</span>, the <span class="bc">base cases</span>. (Hint: you have seen this frog before, wearing a staircase.)</div>
+  <div class="pond" id="pondQ" style="margin-top:1.2rem"></div>
+  <p class="sub">The pond, for pondering. Count on your fingers if you want — pad 4 is small enough to brute-force, which is exactly how you sanity-check a base case.</p>
+</section>
+<div class="notes">Answer she should produce: state "ways[i] = # hop-sequences reaching pad i"; transition ways[i]=ways[i−1]+ways[i−2] (last hop was +1 or +2); base ways[0]=1, ways[1]=1. It's climbing stairs = fib. The finger-count: pad 4 → 5 ways (11111… no wait, hops: 1111, 112, 121, 211, 22 → 5).</div>
+
+<!-- 3 REP 1 A -->
+<section class="slide">
+  <div class="kicker"><span class="rep">REP 1 · answer</span> It was Fibonacci in a pond</div>
+  <div class="abox">✅ <b>Answer: 5 ways.</b> Every route to pad 4 arrives from pad 3 (3 ways to be there) or pad 2 (2 ways) — and those are ALL the options, so 3 + 2 = 5. The five: 1111 · 112 · 121 · 211 · 22.</div>
+  <div class="cols">
+    <div class="col">
+      <div class="pond" id="pondA"></div>
+      <button class="btn" data-replay="pondA">↻ replay</button>
+      <p class="sub" style="font-size:.95rem">Each pad's count = sum of the two pads behind it. Every pad is grown fresh from seeded noise — no two alike, like real ponds and real subproblems.</p>
+    </div>
+    <div class="col">
+      <pre id="codeFrog" data-type></pre>
+      <p class="sub" style="font-size:.95rem">⌨ typed the way you'd narrate it: state → base → transition → answer. Two variables because the dependency window is only two pads wide.</p>
+    </div>
+  </div>
+</section>
+<div class="notes">Narration script to rehearse with the typing: "My state: ways to reach pad i. Last hop was +1 or +2, so I sum the two previous. Bases: one way to be at the start, one way to reach pad 1. I only ever need the last two values, so two variables, O(n) time O(1) space." ~20 seconds, complete.</div>
+
+<!-- 4 REP 2 Q (copy-paste morph) -->
+<section class="slide">
+  <div class="kicker"><span class="rep">REP 2 · the interviewer edits</span> Same pond, new rules</div>
+  <div class="qbox">Interviewer: <i>"Nice. Now each pad has a <b>toll</b> 💰 = [0, 2, 1, 4, 1], paid when you land on it. <b>Minimize total toll</b> to reach pad 4 (start is free)."</i><br><br>
+  <b>Q: What changes in your code — and what stays?</b> Be precise: which <em>lines</em>, which <em>operator</em>?</div>
+  <p class="sub">This is the most common interview move in existence: a solved problem, lightly mutated. The skill being tested is knowing <b>which part of the recipe absorbs the change</b>.</p>
+</section>
+<div class="notes">Expected answer: the STATE sentence barely changes (ways→min toll), the BASES change meaning (0 cost), and only the TRANSITION's combiner changes: + becomes min(+toll). Counting → optimizing, Part 1's taxonomy. The next slide animates exactly this as a copy-paste-then-edit.</div>
+
+<!-- 5 REP 2 A -->
+<section class="slide">
+  <div class="kicker"><span class="rep">REP 2 · answer</span> Copy. Paste. Edit two lines. Narrate.</div>
+  <div class="abox">✅ <b>Answer: minimum toll = 2</b>, via route 0→2→4 (pay 1 + 1). What changed: <span class="bc">the bases</span> (counts → real starting costs) and <span class="tr">the combiner</span> (+ → min). What stayed: the loop, the window, the whole structure.</div>
+  <div class="cols">
+    <div class="col">
+      <pre id="codeEvolve"></pre>
+      <button class="btn" id="evolveBtn">▶ apply the interviewer's edit</button>
+    </div>
+    <div class="col card" style="max-width:420px">
+      <h3>The motion to model</h3>
+      <p>Literally say: <i>"I'll reuse my structure"</i> — then change, out loud:<br><br>
+      ① <span class="bc">bases</span>: "one way" counts → <b>actual starting costs</b> (0 and toll[1])<br>
+      ② <span class="tr">combiner</span>: <b>+</b> (count ways) → <b>min(…) + toll</b> (cheapest way)<br><br>
+      Everything else — the loop, the two rolling variables, the window — survives untouched.</p>
+    </div>
+  </div>
+</section>
+<div class="notes">The rose flashes mark exactly the edited tokens. This reuse-and-mutate motion is worth practicing physically: it shows structural understanding AND saves minutes in the real interview. Check: pads tolls [0,2,1,4,1]; min(0→2(1)→4(1))=2 vs 0→1(2)→3(4)... yes 2.</div>
+
+<!-- 6 REP 3 Q -->
+<section class="slide">
+  <div class="kicker"><span class="rep">REP 3 · two dimensions</span> City Blocks</div>
+  <div class="qbox">🏠 You're at home (top-left). Work 🏁 is at bottom-right of a 4×6 block grid. You only ever walk <b>east or south</b>. One intersection is closed for a street fair 🚧.<br><br>
+  <b>Q: How many routes to work?</b> First: what's the <span class="st">state</span>, and what does 🚧 do to it?</div>
+  <p class="sub">New ingredient vs the frog: the state needs <b>two</b> coordinates now. The 🚧 is testing whether your base cases and transitions survive contact with reality.</p>
+</section>
+<div class="notes">Expected: dp[r][c] = # routes reaching (r,c); transition up+left; bases first row/col = 1 UNTIL an obstacle, after which 0s propagate; the obstacle cell itself is 0. This is Unique Paths II (LC 63). Common miss: setting the whole first row to 1 ignoring that an obstacle blocks everything after it.</div>
+
+<!-- 7 REP 3 A -->
+<section class="slide">
+  <div class="kicker"><span class="rep">REP 3 · answer</span> The street fair eats a whole lane of routes</div>
+  <div class="abox">✅ <b>Answer: 28 routes</b> (it would be 56 with no fair). The 🚧 isn't special-cased — it's simply a <span class="st">state whose value is 0</span>, and the recurrence routes around it on its own.</div>
+  <div class="cols">
+    <div class="col">
+      <div class="dpgrid" id="gCity"></div>
+      <button class="btn" data-replay="gCity">↻ replay</button>
+    </div>
+    <div class="col card" style="max-width:430px">
+      <h3>What the animation shows</h3>
+      <p>▸ <span class="bc">teal edges</span>: one route each — <em>until</em> the 🚧 would block them<br>
+      ▸ 🚧 contributes <b>0</b> — it's not skipped, it's a state whose answer is "no routes"<br>
+      ▸ every other cell: <span class="tr">up + left</span>, same as ever<br>
+      ▸ <b>Answer: 28</b> routes (vs 56 with no fair — one closed corner cost half the city's options)</p>
+    </div>
+  </div>
+</section>
+<div class="notes">Key teaching point: obstacles aren't special-cased with if-statements sprinkled everywhere — they're just states with value 0, and the recurrence handles the rest. "Make the weird thing a normal state with a known value" is a deep DP instinct. Grid is 4 rows × 6 cols, obstacle at row 1, col 3 (0-indexed).</div>
+
+<!-- 8 REP 4 Q -->
+<section class="slide">
+  <div class="kicker"><span class="rep">REP 4 · choices</span> Heist Street</div>
+  <div class="qbox">🏠 Five houses hold 💰 = [2, 7, 9, 3, 1]. Rob any subset, but <b>never two adjacent</b> (alarms talk to their neighbors).<br><br>
+  <b>Q: Maximum loot?</b> And — recalling your own pre-test from Part 1 — state the <span class="st">state</span> as a <b>value</b>, not a decision.</div>
+  <p class="sub">Trace it by hand first: 5 houses is small. Then check yourself: does your English sentence answer "how much?" (good) or "which ones?" (leaking).</p>
+</section>
+<div class="notes">This directly targets her Part-1 pre-test miss ("whether to rob house i"). Correct: dp[i] = max loot from houses 0..i. Transition max(skip=dp[i−1], take=dp[i−2]+v[i]). Hand answer: 2+9+1=12. The Q slide literally cites her error pattern — personalized scaffolding.</div>
+
+<!-- 9 REP 4 A -->
+<section class="slide">
+  <div class="kicker"><span class="rep">REP 4 · answer</span> 12 — and watch which doors get kicked</div>
+  <div class="abox">✅ <b>Answer: 12</b> — rob houses 0, 2, 4 (2 + 9 + 1). The <span class="st">state is a VALUE</span> ("max loot so far"), never a yes/no decision — decisions are what the <span class="tr">transition</span> compares, not what the state stores.</div>
+  <div class="cols">
+    <div class="col">
+      <div class="dpgrid" id="gHeist"></div>
+      <button class="btn" data-replay="gHeist">↻ replay</button>
+      <p class="sub" style="font-size:.95rem">Top row: the street. Bottom row: <span class="st">best-so-far</span> — rose frames mark houses in the optimal plan (0, 2, 4 → 2+9+1 = <b>12</b>).</p>
+    </div>
+    <div class="col">
+      <pre id="codeHeist" data-type></pre>
+    </div>
+  </div>
+</section>
+<div class="notes">Note the state sentence in the typed comment — a VALUE ("max loot"), fixing the pre-test error for good. The backtrace (which houses) is recoverable from the dp values afterwards; in interviews say "if they want the actual houses, I'd store the choice or walk the table backwards" — one sentence, don't implement unless asked.</div>
+
+<!-- 10 REP 5 Q -->
+<section class="slide">
+  <div class="kicker"><span class="rep">REP 5 · the trap</span> The Loot Bag</div>
+  <div class="qbox">Your bag holds <b>8 kg</b>. The vault contains: 🗡 (2kg, value 3) · ⚗️ (3kg, 4) · 💎 (4kg, 5) · 📜 (5kg, 8). One of each.<br><br>
+  <b>Q1: Best haul?</b><br>
+  <b>Q2 (the real exam): you compress the table to one row — which direction does the capacity loop run, and what goes wrong in the other direction?</b></div>
+  <p class="sub">If Q2 feels fuzzy, DO NOT advance yet — re-derive it: when you read <span class="tr">dp[w−weight]</span>, whose row do you need it to be from?</p>
+</section>
+<div class="notes">Q1: capacity 8 best = 📜(5,8)+⚗️(3,4) = 12. Q2: descending, because dp[w−wt] must still hold the PREVIOUS item's value; ascending would let item i be counted twice (= unbounded knapsack by accident). This is the deck's hardest instinct; the stop-sign phrasing is deliberate scaffolding.</div>
+
+<!-- 11 REP 5 A -->
+<section class="slide">
+  <div class="kicker"><span class="rep">REP 5 · answer</span> 12 — and the loop runs backwards</div>
+  <div class="abox">✅ <b>Answers: best haul = 12</b> (📜 8 + ⚗️ 4, weight 8 exactly) · <b>the loop runs DESCENDING</b>, because dp[w−wt] must still hold <i>yesterday's row</i> (the previous item's answers); ascending would let an item pay for itself twice.</div>
+  <div class="cols">
+    <div class="col">
+      <div class="dpgrid" id="gLoot"></div>
+      <button class="btn" data-replay="gLoot">↻ replay</button>
+      <p class="sub" style="font-size:.95rem">Rose cells: where <b>take</b> beat <b>skip</b>. Final cell: <b>12</b> (📜 + ⚗️).</p>
+    </div>
+    <div class="col">
+      <pre><span class="cmt"># one-row knapsack: dp[w] = best value within capacity w</span>
+<span class="cbc">dp = [0] * 9</span>
+for emoji, wt, val in loot:
+    for w in range(8, wt-1, <span class="chg">-1</span>):   <span class="cmt"># ← DESCENDING: dp[w-wt] must</span>
+        <span class="ctr">dp[w] = max(dp[w], dp[w-wt] + val)</span>  <span class="cmt">#   still be YESTERDAY's row</span>
+<span class="cmt"># ascending instead? item re-usable within its own row</span>
+<span class="cmt"># = you silently solved UNBOUNDED knapsack. Classic silent bug.</span></pre>
+      <p class="sub" style="font-size:.95rem">One highlighted character carries the whole exam. Say the "yesterday's row" sentence out loud and the direction is never fuzzy again.</p>
+    </div>
+  </div>
+</section>
+<div class="notes">The -1 is wrapped in the .chg highlight on purpose — THE character of 2-D DP interviews. Coin Change flips it: reuse wanted → ascending. Pair them as a before/after in the playground tonight: knapsack descending, coin change ascending, same skeleton.</div>
+
+<!-- 12 REP 6 Q (boss) -->
+<section class="slide">
+  <div class="kicker"><span class="rep">REP 6 · boss fight</span> The Parade Alignment</div>
+  <div class="qbox">Two parades march past: <br>
+  Parade A: 🦆 🐱 🦆 🐸 🐱 &nbsp;&nbsp;&nbsp; Parade B: 🐱 🦆 🐸<br><br>
+  <b>Q: What's the longest sequence of animals appearing in BOTH parades, in order (gaps allowed)?</b><br><br>
+  And the structural question: what are the <span class="st">two indices of your state</span>, and what are the <span class="tr">two cases of your transition</span>?</div>
+  <p class="sub">No numbers in sight — that's deliberate. If the recipe only works for you on integers, it hasn't become an instinct yet. (It will in about one slide.)</p>
+</section>
+<div class="notes">LCS in costume. State: dp[i][j] = LCS length of A's first i animals, B's first j. Transition: last animals match → diag+1; else max(up, left). Answer: 🐱 🦆 🐸, length 3 (A positions 2,3,4). The emoji disguise tests transfer — the real interview skill.</div>
+
+<!-- 13 REP 6 A -->
+<section class="slide">
+  <div class="kicker"><span class="rep">REP 6 · answer</span> 🐱🦆🐸 — length 3, found by a table</div>
+  <div class="abox">✅ <b>Answer: 3</b> — the subsequence 🐱🦆🐸 marches in both parades. <span class="tr">Match → diagonal + 1</span>; <span class="tr">no match → carry max(up, left)</span>; <span class="bc">empty parade rows = 0</span>.</div>
+  <div class="cols">
+    <div class="col">
+      <div class="dpgrid" id="gParade"></div>
+      <button class="btn" data-replay="gParade">↻ replay</button>
+    </div>
+    <div class="col card" style="max-width:430px">
+      <h3>Read the animation</h3>
+      <p>▸ <span class="bc">teal zeros</span>: empty-parade bases<br>
+      ▸ <span class="tr">rose cells</span>: the last animals <b>match</b> → diagonal + 1 — watch the matches climb 1 → 2 → 3<br>
+      ▸ plain cells: carry the best of up/left<br><br>
+      This is LCS (Part 2, slide 7) wearing feathers. Same table runs diff tools and DNA alignment — mention that and the interviewer knows you see through costumes.</p>
+    </div>
+  </div>
+</section>
+<div class="notes">Trace the rose cells: (A1=🦆,B2=🦆)→1 … the chain ends at dp[5][3]=3 via 🐱(A2? no—) verify: A=🦆🐱🦆🐸🐱, B=🐱🦆🐸. LCS=🐱🦆🐸 (A2,A3,A4). The point to land: six reps, five costumes, ONE recipe. Transfer achieved.</div>
+
+<!-- 14 GRADUATION -->
+<section class="slide">
+  <div class="kicker">🌿 Graduation, Among the Lilies</div>
+  <h2>You just solved: counting, optimizing, grids, obstacles, choices, budgets, and alignment. One recipe.</h2>
+  <ul style="list-style:none; font-size:1.15rem; line-height:2.1; font-family:'Segoe UI',sans-serif">
+    <li>✅ <span class="st">State as a value, in one sentence</span> — tested in every rep</li>
+    <li>✅ <span class="tr">Transition = condition on the last decision</span> — hop, step, move, rob, pack, match</li>
+    <li>✅ <span class="bc">Bases = tiny cases answered by hand</span> — and obstacles are just states worth 0</li>
+    <li>✅ The copy-paste-and-edit motion when the interviewer mutates the problem</li>
+    <li>✅ The descending-loop sentence: <i>"dp[w−wt] must still be yesterday's row"</i></li>
+  </ul>
+  <p class="sub"><b>Homework before the real room</b> (playground, cold, recipe-in-comments first): Coin Change (LC 322 — the ascending twin) · Edit Distance (LC 72 — LCS + one more case) · House Robber II (LC 213 — circular street, reduce to two line-streets). Then you're not hoping to recognize DP — you're waiting for it.</p>
+</section>
+<div class="notes">Confidence-building close by design. If she wants a REP 7+, natural extensions: Jump Game (reachability combiner = OR), Decode Ways (string counting with a gotcha base), Longest Increasing Subsequence (state indexed by "ending here" — a new state flavor that previews Part 3).</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">← → navigate · N notes · Q then A — attempt before advancing! · ↻ replays</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+
+/* ---------- grid builder (same engine as Part 2) ---------- */
+function buildGrid(id, rows, cols, cellFn){
+  const g=document.getElementById(id);
+  g.style.gridTemplateColumns=`repeat(${cols}, auto)`; g.innerHTML="";
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    const s=cellFn(r,c), d=document.createElement("div");
+    d.className="dpcell "+s.cls; d.innerHTML=s.text; d.dataset.delay=s.delay; g.appendChild(d);
+  }
+}
+function playGrid(id){
+  const cells=[...document.getElementById(id).querySelectorAll(".dpcell")];
+  cells.forEach(c=>c.classList.remove("on"));
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    cells.forEach(c=>setTimeout(()=>c.classList.add("on"), 150+ +c.dataset.delay*110));
+  }));
+}
+
+/* ---------- REP1: a procedurally-grown pond ---------- */
+function mulberry32(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0;
+  let t=Math.imul(seed^seed>>>15, 1|seed); t=t+Math.imul(t^t>>>7, 61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296; }; }
+
+function makePad(rng, px){
+  // every pad unique AND organic: wobbly radius (no perfect circles), notch wedge, tilt, vein fan, dew
+  const uid="lg"+Math.floor(rng()*1e9);
+  const hue=96+rng()*54, sat=42+rng()*26, l1=34+rng()*10, l2=l1+16;
+  const notch=rng()*360, tilt=(rng()-.5)*24, R=44;
+  const NPTS=11, pts=[];
+  for(let k=0;k<NPTS;k++){                                       // sample the 320° rim with radius noise
+    const ang=(notch + k*(320/(NPTS-1)))*Math.PI/180;
+    const r=R*(0.84 + rng()*0.28);                               // ±14% wobble → leafy, hand-drawn rim
+    pts.push([r*Math.cos(ang), r*Math.sin(ang)]);
+  }
+  let d=`M0 0 L${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  for(let k=1;k<NPTS;k++){                                       // smooth through midpoints (quadratic)
+    const mx=((pts[k-1][0]+pts[k][0])/2).toFixed(1), my=((pts[k-1][1]+pts[k][1])/2).toFixed(1);
+    d+=` Q${pts[k-1][0].toFixed(1)} ${pts[k-1][1].toFixed(1)} ${mx} ${my}`;
+  }
+  d+=` L${pts[NPTS-1][0].toFixed(1)} ${pts[NPTS-1][1].toFixed(1)} Z`;
+  let veins="";
+  const nv=4+Math.floor(rng()*3);
+  for(let k=0;k<nv;k++){ const a=(notch+45+k*(270/(nv-1))+(rng()-.5)*14)*Math.PI/180;
+    veins+=`<line x1="0" y1="0" x2="${(Math.cos(a)*R*.82).toFixed(1)}" y2="${(Math.sin(a)*R*.82).toFixed(1)}"
+      stroke="hsl(${hue} ${sat}% ${l1-9}%)" stroke-width="${(1+rng()).toFixed(1)}" opacity=".45" stroke-linecap="round"/>`; }
+  const dew = rng()<.5 ? `<circle cx="${(rng()*30-15).toFixed(0)}" cy="${(rng()*30-15).toFixed(0)}" r="${(2+rng()*2).toFixed(1)}"
+      fill="#eafff6" opacity=".65"/>` : "";
+  return `<svg width="${px}" height="${px}" viewBox="-52 -52 104 104" style="transform:rotate(${tilt.toFixed(0)}deg)">
+    <defs><radialGradient id="${uid}" cx="38%" cy="34%">
+      <stop offset="0%" stop-color="hsl(${hue} ${sat+16}% ${l2}%)"/>
+      <stop offset="100%" stop-color="hsl(${hue} ${sat}% ${l1}%)"/></radialGradient></defs>
+    <path d="${d}" fill="url(#${uid})" stroke="hsl(${hue} ${sat}% ${l1-12}%)" stroke-width="1.4"/>${veins}${dew}</svg>`;
+}
+
+function renderPond(id, withCounts, seed){
+  const pond=document.getElementById(id); if(!pond) return;
+  const rng=mulberry32(seed), counts=[1,1,2,3,5];
+  pond.innerHTML="";
+  for(let c=0;c<5;c++){
+    const w=document.createElement("div"); w.className="pad-wrap";
+    w.style.setProperty("--bobdur",(3.4+rng()*2.2).toFixed(2)+"s");   // each pad bobs to its own rhythm
+    w.style.setProperty("--bobdel",(-rng()*4).toFixed(2)+"s");
+    const px=66+Math.floor(rng()*28);
+    w.innerHTML=makePad(rng,px)+
+      (withCounts?`<span class="chip ${c<2?"b":(c===4?"hl":"v")}" data-step="${c}">${counts[c]}</span>`:"")+
+      `<span class="padlabel">pad ${c}${c===4?" 🌺":""}</span>`;
+    pond.appendChild(w);
+  }
+}
+let pondTimers=[];
+function playPond(id){
+  const pond=document.getElementById(id);
+  pondTimers.forEach(clearTimeout); pondTimers=[];
+  pond.querySelectorAll(".chip").forEach(ch=>ch.classList.remove("on"));
+  pond.querySelectorAll(".chip").forEach(ch=>{
+    const k=+ch.dataset.step;
+    pondTimers.push(setTimeout(()=>{ ch.classList.add("on"); }, 500+k*550));
+  });
+}
+renderPond("pondQ", false, 20261025);   // the question pond: pads only, ponder away
+renderPond("pondA", true, 7041776);     // the answer pond: different seed, different flora
+
+/* ---------- atomic-age starbursts (title + belt ceremony) ---------- */
+function sprinkleStars(section, n, rng){
+  for(let k=0;k<n;k++){
+    const s=document.createElement("span"); s.className="star";
+    const sz=16+rng()*30;
+    s.style.cssText=`left:${8+rng()*84}%; top:${6+rng()*30}%; width:${sz}px; height:${sz}px;
+      --twdur:${(2.6+rng()*2.6).toFixed(2)}s; --twdel:${(-rng()*4).toFixed(2)}s;
+      --starcol:${rng()<.5?"#d9a441":"#c2410c"}`;
+    s.innerHTML=`<svg viewBox="-50 -50 100 100" width="100%" height="100%">
+      <path d="M0,-46 L6.5,-6.5 L46,0 L6.5,6.5 L0,46 L-6.5,6.5 L-46,0 L-6.5,-6.5 Z"/>
+      <circle class="dot" cx="${(rng()*50-25).toFixed(0)}" cy="${(rng()*40-30).toFixed(0)}" r="2.3"/></svg>`;
+    section.appendChild(s);
+  }
+}
+const starRng=mulberry32(451);
+sprinkleStars(slides[0], 6, starRng);
+sprinkleStars(slides[slides.length-1], 7, starRng);
+
+/* REP3: city 4x6, obstacle (1,3) */
+const CR=4, CC=6, city=Array.from({length:CR},()=>Array(CC).fill(0));
+for(let r=0;r<CR;r++) for(let c=0;c<CC;c++){
+  if(r===1&&c===3){ city[r][c]=0; continue; }
+  if(r===0&&c===0){ city[r][c]=1; continue; }
+  city[r][c]=(r>0?city[r-1][c]:0)+(c>0?city[r][c-1]:0);
+}
+buildGrid("gCity", CR, CC, (r,c)=>{
+  if(r===1&&c===3) return {text:"🚧", cls:"x", delay:r+c};
+  let t=city[r][c], cls=(r===0||c===0)?"b":"v";
+  if(r===0&&c===0) t="🏠1";
+  if(r===CR-1&&c===CC-1){ t="🏁"+t; cls="hl"; }
+  return {text:t, cls, delay:r+c};
+});
+
+/* REP4: heist street, v=[2,7,9,3,1], best=12, chosen 0,2,4 */
+const HV=[2,7,9,3,1], hd=[]; let p2=0,p1=0;
+HV.forEach(v=>{ const cur=Math.max(p1,p2+v); hd.push(cur); p2=p1; p1=cur; });
+buildGrid("gHeist", 2, 5, (r,c)=>{
+  if(r===0) return {text:"🏠💰"+HV[c], cls:[0,2,4].includes(c)?"hl hdr":"hdr", delay:c*.5};
+  return {text:hd[c], cls:c===0?"b":(c===4?"hl":"v"), delay:3+c};
+});
+
+/* REP5: loot knapsack, items 🗡⚗️💎📜 */
+const LOOT=[["🗡",2,3],["⚗️",3,4],["💎",4,5],["📜",5,8]], W=8;
+const kd=Array.from({length:5},()=>Array(W+1).fill(0));
+const tk=Array.from({length:5},()=>Array(W+1).fill(false));
+LOOT.forEach(([e,wt,val],x)=>{ const i=x+1;
+  for(let w=0;w<=W;w++){ kd[i][w]=kd[i-1][w];
+    if(w>=wt&&kd[i-1][w-wt]+val>kd[i][w]){ kd[i][w]=kd[i-1][w-wt]+val; tk[i][w]=true; } }});
+buildGrid("gLoot", 6, W+2, (r,c)=>{
+  if(r===0) return {text:c===0?"":("w"+(c-1)), cls:"hdr", delay:0};
+  if(c===0) return {text:r===1?"∅":LOOT[r-2][0], cls:"hdr", delay:0};
+  const i=r-1, w=c-1;
+  return {text:kd[i][w], cls:i===0?"b":(tk[i][w]?"hl":"v"), delay:1+i*1.6+w*.3};
+});
+
+/* REP6: parade LCS, A=🦆🐱🦆🐸🐱 B=🐱🦆🐸 */
+const PA=["🦆","🐱","🦆","🐸","🐱"], PB=["🐱","🦆","🐸"];
+const ld=Array.from({length:PA.length+1},()=>Array(PB.length+1).fill(0));
+const lm=Array.from({length:PA.length+1},()=>Array(PB.length+1).fill(false));
+for(let i=1;i<=PA.length;i++) for(let j=1;j<=PB.length;j++){
+  if(PA[i-1]===PB[j-1]){ ld[i][j]=ld[i-1][j-1]+1; lm[i][j]=true; }
+  else ld[i][j]=Math.max(ld[i-1][j], ld[i][j-1]);
+}
+buildGrid("gParade", PA.length+2, PB.length+2, (r,c)=>{
+  if(r===0&&c===0) return {text:"", cls:"hdr", delay:0};
+  if(r===0) return {text:c===1?"ε":PB[c-2], cls:"hdr", delay:0};
+  if(c===0) return {text:r===1?"ε":PA[r-2], cls:"hdr", delay:0};
+  const i=r-1, j=c-1;
+  return {text:ld[i][j], cls:(i===0||j===0)?"b":(lm[i][j]?"hl":"v"), delay:(i+j)*.9};
+});
+
+/* ---------- typewriter ---------- */
+const TYPE_SRC={
+  codeFrog:
+`def count_ways(num_pads):            # STATE: ways[i] = hop-seqs reaching pad i
+    ways_two_back = 1                # BASE: one way to stand on pad 0
+    ways_one_back = 1                # BASE: one way to reach pad 1
+    for pad in range(2, num_pads + 1):
+        ways_here = ways_two_back + ways_one_back   # TRANSITION: last hop +2 or +1
+        ways_two_back, ways_one_back = ways_one_back, ways_here
+    return ways_one_back
+
+count_ways(4)   # -> 5  ✅ matches the finger count`,
+  codeHeist:
+`def max_loot(street):                # STATE: best VALUE from houses so far (not a decision!)
+    best_two_back = 0                # best loot using houses up to i-2
+    best_one_back = 0                # best loot using houses up to i-1
+    for cash in street:
+        rob_this  = best_two_back + cash    # take it: neighbor must be skipped
+        skip_this = best_one_back           # leave it: keep the previous best
+        best_two_back, best_one_back = best_one_back, max(rob_this, skip_this)
+    return best_one_back
+
+max_loot([2, 7, 9, 3, 1])   # -> 12  ✅ houses 0+2+4`};
+const typed={};
+function typeCode(id){
+  const el=document.getElementById(id); if(!el) return;
+  const src=TYPE_SRC[id]; el.textContent=""; el.classList.add("caret");
+  clearInterval(typed[id]); let k=0;
+  typed[id]=setInterval(()=>{
+    el.textContent=src.slice(0, ++k);
+    if(k>=src.length){ clearInterval(typed[id]); el.classList.remove("caret"); }
+  }, 14);
+}
+
+/* ---------- evolve (copy-paste-and-edit) animation ---------- */
+const EVOLVE=[
+`<span class="cmt"># v1 — the frog counter you already wrote (copied as-is)</span>
+def count_ways(num_pads):
+    ways_two_back, ways_one_back = <span class="cbc">1, 1</span>
+    for pad in range(2, num_pads + 1):
+        ways_two_back, ways_one_back = ways_one_back, <span class="ctr">ways_two_back + ways_one_back</span>
+    return ways_one_back`,
+`<span class="cmt"># v2 — the interviewer's edit: cheapest route, toll paid on landing</span>
+def min_toll(toll):                      <span class="cmt"># STATE: cheapest total cost landing on pad i</span>
+    cost_two_back = <span class="cbc"><span class="chg">0</span></span>                    <span class="cmt"># ① base: pad 0 is free (you start there)</span>
+    cost_one_back = <span class="cbc"><span class="chg">toll[1]</span></span>              <span class="cmt"># ① base: pad 1 costs its own toll</span>
+    for pad in range(2, len(toll)):
+        land_here = <span class="ctr"><span class="chg">toll[pad] + min(cost_one_back, cost_two_back)</span></span>  <span class="cmt"># ② + → min</span>
+        cost_two_back, cost_one_back = cost_one_back, land_here
+    return cost_one_back
+
+min_toll([0, 2, 1, 4, 1])   # -> 2   (route 0→2→4, paying 1+1)`];
+let evoState=0;
+const evoPre=document.getElementById("codeEvolve"), evoBtn=document.getElementById("evolveBtn");
+function setEvo(k){ evoPre.innerHTML=EVOLVE[k]; evoBtn.textContent=k===0?"▶ apply the interviewer's edit":"↺ back to the original"; }
+evoBtn.addEventListener("click",e=>{ e.stopPropagation(); evoState=1-evoState; setEvo(evoState); });
+setEvo(0);
+
+/* ---------- per-slide triggers ---------- */
+const SLIDE_FX={};
+slides.forEach((s,idx)=>{
+  const g=s.querySelector(".dpgrid"), t=s.querySelector("pre[data-type]"), p=s.querySelector(".pond .chip") && s.querySelector(".pond");
+  if(g||t||p) SLIDE_FX[idx]=()=>{ if(g) playGrid(g.id); if(p) playPond(p.id); if(t) typeCode(t.id); };
+});
+document.querySelectorAll("[data-replay]").forEach(b=>
+  b.addEventListener("click",e=>{ e.stopPropagation();
+    const id=b.dataset.replay;
+    if(id.startsWith("pond")) playPond(id); else playGrid(id);
+    const t=b.closest(".slide").querySelector("pre[data-type]"); if(t) typeCode(t.id); }));
+
+/* ---------- nav ---------- */
+let i=0;
+function show(n){ i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length;
+  if(SLIDE_FX[i]) SLIDE_FX[i]();
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')show(i+1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+  else if(e.key.toLowerCase()==='n')document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.();
+});
+show(0);
+
+/* ---------- tooltips ---------- */
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div><div class="t-row"><b>Why:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect(); let x=r.left, y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20)x=innerWidth-tw-20; if(y+th>innerHeight-20)y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

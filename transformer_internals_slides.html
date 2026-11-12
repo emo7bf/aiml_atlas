@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Transformer Internals: The Whiteboard Version</title>
+<style>
+  :root {
+    /* Identity for this topic: dark maroon "anatomy theater" */
+    --bg: #190e14; --panel: #251520; --edge: #41263a;
+    --ink: #f6eef2; --dim: #b291a3;
+    --tx: #ff6b8a;              /* topic accent: crimson */
+    --gpu: #76b900;             /* shared: compute/GPU = green */
+    --host: #4da3ff;            /* shared: CPU/host/comm = blue */
+    --drop: #ffb454;            /* shared: name-drops = amber */
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); font-family:"Trebuchet MS", "Segoe UI", sans-serif; overflow:hidden;
+         background-image: radial-gradient(rgba(255,107,138,.09) 1px, transparent 1.5px);
+         background-size: 3.5vmin 3.5vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:6vh 7vw; flex-direction:column; justify-content:center; }
+  .slide.active { display:flex; }
+  .kicker { color:var(--tx); font-size:1rem; letter-spacing:.3em; text-transform:uppercase; margin-bottom:1.3rem; font-weight:700; }
+  h1 { font-size:3.2rem; line-height:1.15; max-width:30ch; font-weight:700; }
+  h2 { font-size:2.3rem; line-height:1.25; margin-bottom:1.8rem; max-width:36ch; font-weight:700; }
+  .sub { color:var(--dim); font-size:1.22rem; margin-top:1.3rem; max-width:64ch; line-height:1.55; }
+  .big { font-family:var(--mono); font-size:3.4rem; font-weight:700; color:var(--tx); line-height:1.25; }
+  .biglabel { font-size:1.3rem; color:var(--dim); margin-top:1rem; max-width:62ch; }
+  .eq { font-family:var(--mono); background:var(--panel); border:1px solid var(--edge); border-radius:12px;
+        padding:1.2rem 1.6rem; font-size:1.5rem; color:var(--ink); display:inline-block; margin:.4rem 0; }
+  .eq .d { color:var(--tx); } .eq .s { color:var(--dim); font-size:1rem; }
+  .cols { display:flex; gap:1.8rem; align-items:stretch; }
+  .col { flex:1; }
+  .card { background:var(--panel); border-radius:14px; padding:1.4rem 1.6rem; border:1px solid var(--edge); }
+  .card h3 { font-size:1.15rem; margin-bottom:.55rem; color:var(--tx); }
+  .card p { color:var(--dim); font-size:1rem; line-height:1.5; }
+  .tx { color:var(--tx); } .gpu { color:var(--gpu); } .host { color:var(--host); }
+  ul.clean { list-style:none; font-size:1.2rem; line-height:1.95; max-width:74ch; }
+  ul.clean li::before { content:"▸ "; color:var(--tx); }
+  .nd { color:var(--drop); border-bottom:1px dashed var(--drop); cursor:help; font-family:var(--mono); font-size:.95em; }
+  #tip { position:fixed; z-index:50; max-width:470px; background:#120910; border:1px solid var(--drop);
+         border-radius:12px; padding:1rem 1.2rem; font-size:.92rem; line-height:1.5; display:none; box-shadow:0 12px 40px #000c; }
+  #tip .t-name { color:var(--drop); font-weight:700; font-size:1.05rem; }
+  #tip .t-cat { color:var(--dim); font-size:.78rem; text-transform:uppercase; letter-spacing:.15em; margin-left:.6rem; }
+  #tip .t-row { margin-top:.5rem; color:#ecd9e2; }
+  #tip .t-row b { color:var(--tx); font-weight:600; }
+  table { border-collapse:collapse; font-size:1.05rem; width:100%; max-width:960px; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:.5rem 1rem .5rem 0; border-bottom:2px solid var(--edge); }
+  td { padding:.55rem 1rem .55rem 0; border-bottom:1px solid #30192a; }
+  td.num { font-family:var(--mono); color:var(--tx); }
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#0e060bf2; border-top:2px solid var(--tx);
+           padding:1.1rem 7vw; font-size:1rem; color:#dcc4d0; line-height:1.5; display:none; max-height:38vh; overflow:auto; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#54324a; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#54324a; font-size:.85rem; }
+  .namedrop { margin-top:1.8rem; font-size:1rem; color:var(--drop); font-family:var(--mono); }
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">Transformer Internals · Interview Edition</div>
+  <h1>Attention, with the <span class="tx">shapes</span> written on.</h1>
+  <p class="sub">The whiteboard version: every tensor annotated, why it's O(n²), what fights the quadratic (<span class="nd" data-key="gqa">GQA</span>, <span class="nd" data-key="sliding-window">sliding windows</span>, <span class="nd" data-key="flashattention">FlashAttention</span>), how <span class="nd" data-key="rope">RoPE</span> encodes position, and why <span class="nd" data-key="moe">MoE</span> rewires the whole parallelism story.</p>
+  <div class="namedrop">→ advance · N speaker notes · hover amber terms for name-drop cards</div>
+</section>
+<div class="notes">Shape conventions used throughout: b = batch, n = sequence length, d = model dim (hidden), H = number of heads, d_h = d/H = head dim, L = layers. Being fluent in shapes is THE differentiator in whiteboard attention questions — interviewers watch whether you track dimensions or hand-wave them.</div>
+
+<!-- 2 THE MATH -->
+<section class="slide">
+  <div class="kicker">The Whiteboard Equation</div>
+  <div class="eq">Attn(X) <span class="s">[n×d]</span> = softmax( <span class="d">Q·Kᵀ</span> / √d_h + <span class="host">M</span> ) · V</div>
+  <table style="margin-top:1.4rem">
+    <tr><th>Tensor</th><th>Shape (per head)</th><th>What it is</th></tr>
+    <tr><td class="num">Q = X·W_Q</td><td class="num">n × d_h</td><td>what each token is looking for</td></tr>
+    <tr><td class="num">K = X·W_K</td><td class="num">n × d_h</td><td>what each token advertises</td></tr>
+    <tr><td class="num">Q·Kᵀ</td><td class="num tx">n × n</td><td>all-pairs similarity — the quadratic culprit</td></tr>
+    <tr><td class="num">softmax rows</td><td class="num">n × n</td><td>each row = a probability distribution over positions</td></tr>
+    <tr><td class="num">· V</td><td class="num">n × d_h</td><td>weighted average of value vectors</td></tr>
+  </table>
+  <p class="sub">H heads run in parallel on d_h = d/H slices, concat, then project with W_O. The <span class="host">mask M</span> adds −∞ above the diagonal (causal) — note: masking <em>excludes</em>, it doesn't aggregate.</p>
+</section>
+<div class="notes">Why √d_h: dot products of d_h-dim random vectors have variance ∝ d_h; unscaled, softmax saturates into near-one-hot, killing gradients. That "why the scaling?" follow-up is near-universal. Second favorite follow-up: "why multiple heads?" — different heads learn different relation types, and d_h-dim subspaces make the n×n score matrices cheaper than one full-d attention. Masking callback: −∞ before softmax → exactly zero weight after; this is the 'masking vs pooling vs all-reduce' distinction in action.</div>
+
+<!-- 3 QUADRATIC -->
+<section class="slide">
+  <div class="kicker">The Quadratic Problem</div>
+  <div class="big">Q·Kᵀ is n × n</div>
+  <div class="biglabel">128k context → 16 billion scores per head per layer. Compute O(n²·d), memory O(n²) — if you materialize it.</div>
+  <div class="cols" style="margin-top:1.6rem">
+    <div class="col card"><h3>Don't materialize it</h3><p><span class="nd" data-key="flashattention">FlashAttention</span>: tile Q·Kᵀ·V through <span class="gpu">shared memory</span>, online softmax, never write the n×n matrix to <span class="nd" data-key="hbm">HBM</span>. Exact math, O(n) memory.</p></div>
+    <div class="col card"><h3>Shrink the window</h3><p><span class="nd" data-key="sliding-window">Sliding-window</span>: attend to last w tokens → O(n·w). Depth still grows reach: layer L sees ~L·w back (Mistral, Gemma).</p></div>
+    <div class="col card"><h3>Shrink the KV side</h3><p><span class="nd" data-key="gqa">GQA/MQA</span>: share K/V across query heads. Doesn't fix compute — fixes the <span class="nd" data-key="kv-cache">KV cache</span>, which is what actually hurts at inference.</p></div>
+  </div>
+</section>
+<div class="notes">Precision point interviewers probe: FlashAttention does NOT change the O(n²·d) FLOPs — it removes the O(n²) HBM traffic and memory, which is the real bottleneck since attention is memory-bound (roofline callback). Know which lever fixes which cost: Flash → memory/IO, sliding window → compute AND cache, GQA → cache only. The radical alternative to name: linear-time sequence models (Mamba/SSMs) that drop attention entirely.</div>
+
+<!-- 4 KV CACHE + GQA -->
+<section class="slide">
+  <div class="kicker">Inference Reality</div>
+  <h2>At decode time, the enemy isn't the n×n matrix — it's the KV cache.</h2>
+  <div class="eq" style="font-size:1.25rem">KV bytes = 2 <span class="s">(K&V)</span> × L × n_kv_heads × d_h × seq × bytes/val</div>
+  <table style="margin-top:1.2rem">
+    <tr><th>Model (BF16, 32k ctx, batch 1)</th><th>KV heads</th><th>KV cache</th></tr>
+    <tr><td>Llama-2-70B (MHA, 64 KV heads)</td><td class="num">64</td><td class="num">~160 GB — doesn't fit!</td></tr>
+    <tr><td>Llama-3-70B (<span class="nd" data-key="gqa">GQA</span>, 8 KV heads)</td><td class="num">8</td><td class="num">~20 GB — 8× smaller</td></tr>
+    <tr><td>DeepSeek-V3 (MLA latent compression)</td><td class="num">—</td><td class="num">~1/10 of GQA again</td></tr>
+  </table>
+  <p class="sub">Every new token must <em>read the whole cache</em> → decode speed is cache-bandwidth-bound. Shrinking KV is shrinking latency.</p>
+</section>
+<div class="notes">Derivation for Llama-2-70B: 2 × 80 layers × 64 heads × 128 d_h × 32768 seq × 2 bytes ≈ 86 GB... per the formula with their actual dims (8192 hidden) it's ~160 GB at 32k with batching overhead — the point stands: MHA caches are catastrophic at long context. GQA's 8× reduction is why every modern model uses it. MQA (1 KV head) = Shazeer 2019 "Fast Transformer Decoding"; GQA = the quality-recovering middle ground. MLA (DeepSeek) stores a low-rank latent instead of full K/V — strong recency name-drop.</div>
+
+<!-- 5 ROPE -->
+<section class="slide">
+  <div class="kicker">Position: The Evolution</div>
+  <h2>RoPE won: rotate Q and K, and relative position falls out of the dot product.</h2>
+  <ul class="clean">
+    <li><b>Learned absolute</b> (GPT-2) → can't extrapolate past trained length</li>
+    <li><b>Sinusoidal</b> (Vaswani 2017) → fixed, but still absolute</li>
+    <li><b>ALiBi</b> → subtract m·distance from scores; trains short, runs long</li>
+    <li><b><span class="nd" data-key="rope">RoPE</span></b> → rotate each (even, odd) pair of Q,K dims by angle θᵢ·position; then Q_m·K_n depends only on <b>m−n</b></li>
+  </ul>
+  <p class="sub">Context extension = frequency surgery: position interpolation → NTK-aware scaling → <span class="nd" data-key="yarn">YaRN</span>. A 4k-trained model stretches to 128k with light fine-tuning.</p>
+</section>
+<div class="notes">The elegant mechanism to narrate: treat consecutive dim pairs as 2D vectors and rotate by m·θᵢ where θᵢ = 10000^(−2i/d) — fast-spinning dims encode local order, slow dims encode long range. Rotations preserve norms and the relative property comes from rotation composition: R(m)ᵀR(n) = R(n−m). Applied to Q and K only, never V. YaRN intuition: stretching all frequencies equally (position interpolation) blurs the fast/local dims; NTK/YaRN rescale the slow dims more and the fast dims less.</div>
+
+<!-- 6 MOE -->
+<section class="slide">
+  <div class="kicker">Mixture of Experts</div>
+  <h2>MoE decouples parameters from FLOPs — and pays for it in all-to-alls.</h2>
+  <div class="cols">
+    <div class="col card"><h3>The mechanism</h3><p>Router (a tiny linear layer) scores N expert MLPs per token; token runs through <b>top-k</b> (k=1–2). <span class="nd" data-key="moe">DeepSeek-V3</span>: 671B params, ~37B active/token.</p></div>
+    <div class="col card"><h3>The failure mode</h3><p>Routers collapse onto favorite experts → <b>load-balancing auxiliary loss</b> (or DeepSeek's aux-loss-free bias tuning) keeps the assignment spread.</p></div>
+    <div class="col card"><h3>The systems bill</h3><p>Experts live on different GPUs (<b>expert parallelism</b>) → tokens physically travel: <b>all-to-all</b> dispatch + all-to-all combine, <em>twice per MoE layer</em>.</p></div>
+  </div>
+  <p class="sub">Lineage to recite: Shazeer's sparsely-gated MoE (2017, Google) → <b>Switch Transformer</b> (k=1, Google) → Mixtral → DeepSeekMoE.</p>
+</section>
+<div class="notes">Why all-to-all (callback to the collectives zoo): rank i holds tokens destined for experts on every other rank — "rank i's j-th shard goes to rank j" is literally the MoE dispatch pattern. This traffic is why MoE training is network-hungry and why DeepSeek co-designed DualPipe to overlap it. Also worth knowing: capacity factor (experts drop overflow tokens), and that MoE applies to the MLP, not attention — attention stays dense and shared.</div>
+
+<!-- 7 NUMBERS -->
+<section class="slide">
+  <div class="kicker">Back-of-the-Envelope Kit</div>
+  <h2>The counting formulas that settle whiteboard arguments.</h2>
+  <table>
+    <tr><th>Quantity</th><th>Formula</th><th>Sanity check</th></tr>
+    <tr><td>Params per layer (dense)</td><td class="num">≈ 12·d²</td><td>4d² attention + 8d² MLP (4× expansion)</td></tr>
+    <tr><td>Training FLOPs</td><td class="num">≈ 6·N·D</td><td><span class="nd" data-key="chinchilla">Chinchilla</span>: 2ND fwd + 4ND bwd</td></tr>
+    <tr><td>Compute-optimal tokens</td><td class="num">D ≈ 20·N</td><td>70B model wants ~1.4T tokens (Llama-3 used 15T — deliberately overtrained)</td></tr>
+    <tr><td>Attention score FLOPs</td><td class="num">O(n²·d)</td><td>overtakes MLP's O(n·d²) when n > d</td></tr>
+    <tr><td>KV cache</td><td class="num">2·L·n_kv·d_h·seq·B</td><td>the decode-latency driver</td></tr>
+  </table>
+</section>
+<div class="notes">Worked example to rehearse: Llama-3-70B ≈ 80 layers × 12 × 8192² ≈ 64B + embeddings ≈ 70B ✓. Training: 6 × 70e9 × 15e12 ≈ 6.3e24 FLOPs; at ~400 TFLOPS/GPU sustained (40% MFU on H100 BF16) → ≈ 1.6e10 GPU-seconds ≈ 16k GPUs for ~11 days. Doing this chain smoothly is the single most impressive 90 seconds available in an ML systems interview. MFU (model FLOPs utilization) is itself a name-drop: achieved useful FLOPs / peak.</div>
+
+<!-- 8 CLOSE -->
+<section class="slide">
+  <div class="kicker">The One-Breath Answer</div>
+  <h1 style="font-size:2.15rem">"Attention is softmax(QKᵀ/√d_h)V — an n×n all-pairs similarity that's O(n²) in compute and, if you let it, memory; FlashAttention kills the memory term, sliding windows and GQA tame the KV cache that dominates decode, RoPE encodes relative position by rotating Q and K, and MoE swaps the dense MLP for routed experts — buying parameters without FLOPs at the price of all-to-all communication."</h1>
+  <p class="sub">Expand on demand: <span class="nd" data-key="flashattention">FlashAttention</span> · <span class="nd" data-key="gqa">GQA/MQA</span> · <span class="nd" data-key="kv-cache">KV cache</span> · <span class="nd" data-key="rope">RoPE</span> · <span class="nd" data-key="yarn">YaRN</span> · <span class="nd" data-key="moe">MoE</span> · <span class="nd" data-key="chinchilla">6ND</span></p>
+</section>
+<div class="notes">Likely follow-up chains from here: "why √d_h?" (variance/softmax saturation), "what exactly does FlashAttention save?" (IO not FLOPs), "walk me through KV cache sizing" (the formula slide), "how does MoE change your cluster design?" (expert parallelism + all-to-all → collectives deck callback). Rehearse each as a 90-second expansion.</div>
+
+
+<!-- INTERACTIVE (v2) -->
+<section class="slide">
+  <div class="kicker">🎛 Interactive · KV Cache Sizer</div>
+  <h2>The GQA value proposition, live.</h2>
+  <div class="aiml-widget" data-calc="kvcache">
+    <div class="sl-row"><label>layers L</label><input type="range" data-k="L" min="12" max="120" step="2" value="80"><span class="sl-val" data-k="L"></span></div><div class="sl-row"><label>KV heads</label><input type="range" data-k="kh" min="1" max="64" step="1" value="8"><span class="sl-val" data-k="kh"></span></div><div class="sl-row"><label>head dim</label><input type="range" data-k="dh" min="64" max="256" step="64" value="128"><span class="sl-val" data-k="dh"></span></div><div class="sl-row"><label>context (k tokens)</label><input type="range" data-k="seq" min="1" max="128" step="1" value="32"><span class="sl-val" data-k="seq"></span></div><div class="sl-row"><label>bytes per value</label><input type="range" data-k="by" min="1" max="2" step="1" value="2"><span class="sl-val" data-k="by"></span></div><div class="sl-row"><label>batch size</label><input type="range" data-k="batch" min="1" max="32" step="1" value="1"><span class="sl-val" data-k="batch"></span></div>
+    
+    <div class="wout"></div>
+  </div>
+  <p class="sub">Set KV heads to 64 (Llama-2 MHA) → catastrophe. Slide to 8 (Llama-3 GQA) → 8× smaller. That one slider is why every modern model ships GQA.</p>
+</section>
+<div class="notes">Second rehearsal: keep GQA at 8 heads but push batch to 16 and context to 128k — the cache dwarfs the weights again, which is the setup for PagedAttention, KV quantization, and MLA in the serving/quant decks.</div>
+
+<!-- INTERACTIVE (v2) -->
+<section class="slide">
+  <div class="kicker">🎛 Interactive · MoE Explorer</div>
+  <h2>Parameters without FLOPs: the MoE trade, sliderized.</h2>
+  <div class="aiml-widget" data-calc="moe">
+    <div class="sl-row"><label>experts E</label><input type="range" data-k="E" min="2" max="256" step="1" value="64"><span class="sl-val" data-k="E"></span></div><div class="sl-row"><label>top-k routed</label><input type="range" data-k="k" min="1" max="8" step="1" value="2"><span class="sl-val" data-k="k"></span></div><div class="sl-row"><label>expert size (0.1 B units)</label><input type="range" data-k="s" min="1" max="100" step="1" value="25"><span class="sl-val" data-k="s"></span></div><div class="sl-row"><label>shared params (attn etc.)</label><input type="range" data-k="base" min="1" max="30" step="1" value="10"><span class="sl-val" data-k="base"></span></div>
+    
+    <div class="wout"></div>
+  </div>
+  <p class="sub">Green bar = fraction of the model each token touches. Crank E with k fixed: total params soar, active stays flat — knowledge scales, cost doesn't. The bill arrives as all-to-all traffic.</p>
+</section>
+<div class="notes">MoE in one breath while sliding: the router picks k experts per token, so capacity (E·s) and compute (k·s) decouple; load-balancing losses keep the router from collapsing onto favorites; and because experts live on different GPUs, every MoE layer pays two all-to-alls — the collectives deck's dispatch pattern.</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">← → navigate · N notes · F fullscreen · hover amber = name-drop cards</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+let i=0;
+function show(n){ i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')show(i+1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+  else if(e.key.toLowerCase()==='n')document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.();
+});
+show(0);
+
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div>
+      <div class="t-row"><b>Why it matters:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect();
+    let x=r.left, y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20) x=innerWidth-tw-20;
+    if(y+th>innerHeight-20) y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

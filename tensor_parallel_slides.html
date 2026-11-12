@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tensor Parallelism &amp; Collectives: Split the Matrix</title>
+<style>
+  :root {
+    /* Identity for this topic: deep teal "circuit board" */
+    --bg: #07171a; --panel: #0e2328; --edge: #1d3b42;
+    --ink: #eaf4f4; --dim: #85a8ab;
+    --tp: #2dd4bf;              /* topic accent: cyan/teal */
+    --gpu: #76b900;             /* shared: compute/GPU = green */
+    --host: #4da3ff;            /* shared: CPU/host/comm = blue */
+    --drop: #ffb454;            /* shared: name-drops = amber */
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); font-family:"Segoe UI", system-ui, sans-serif; overflow:hidden;
+         background-image: linear-gradient(rgba(45,212,191,.055) 1px, transparent 1px),
+                           linear-gradient(60deg, rgba(45,212,191,.055) 1px, transparent 1px),
+                           linear-gradient(-60deg, rgba(45,212,191,.055) 1px, transparent 1px);
+         background-size: 5vmin 8.66vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:6vh 7vw; flex-direction:column; justify-content:center; }
+  .slide.active { display:flex; }
+  .kicker { color:var(--tp); font-size:1rem; letter-spacing:.35em; text-transform:uppercase; margin-bottom:1.3rem; font-weight:700; }
+  h1,h2 { font-weight:800; letter-spacing:.01em; }
+  h1 { font-size:3.2rem; line-height:1.15; max-width:30ch; }
+  h2 { font-size:2.3rem; line-height:1.25; margin-bottom:2rem; max-width:36ch; }
+  .sub { color:var(--dim); font-size:1.22rem; margin-top:1.4rem; max-width:64ch; line-height:1.55; }
+  .big { font-family:var(--mono); font-size:3.6rem; font-weight:700; color:var(--tp); line-height:1.2; }
+  .biglabel { font-size:1.3rem; color:var(--dim); margin-top:1rem; max-width:62ch; }
+  .cols { display:flex; gap:2rem; align-items:stretch; }
+  .col { flex:1; }
+  .card { background:var(--panel); border-radius:14px; padding:1.4rem 1.6rem; border:1px solid var(--edge); }
+  .card h3 { font-size:1.18rem; margin-bottom:.55rem; color:var(--tp); }
+  .card p { color:var(--dim); font-size:1rem; line-height:1.5; }
+  .tp { color:var(--tp); } .gpu { color:var(--gpu); } .host { color:var(--host); }
+  ul.clean { list-style:none; font-size:1.22rem; line-height:2; max-width:72ch; }
+  ul.clean li::before { content:"▸ "; color:var(--tp); }
+  .nd { color:var(--drop); border-bottom:1px dashed var(--drop); cursor:help; font-family:var(--mono); font-size:.95em; }
+  #tip { position:fixed; z-index:50; max-width:470px; background:#041012; border:1px solid var(--drop);
+         border-radius:12px; padding:1rem 1.2rem; font-size:.92rem; line-height:1.5; display:none; box-shadow:0 12px 40px #000c; }
+  #tip .t-name { color:var(--drop); font-weight:700; font-size:1.05rem; }
+  #tip .t-cat { color:var(--dim); font-size:.78rem; text-transform:uppercase; letter-spacing:.15em; margin-left:.6rem; }
+  #tip .t-row { margin-top:.5rem; color:#d6e6e6; }
+  #tip .t-row b { color:var(--tp); font-weight:600; }
+  table { border-collapse:collapse; font-size:1.05rem; width:100%; max-width:960px; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:.5rem 1rem .5rem 0; border-bottom:2px solid var(--edge); }
+  td { padding:.55rem 1rem .55rem 0; border-bottom:1px solid #12303a; }
+  td.num { font-family:var(--mono); color:var(--tp); }
+  .mm { display:flex; gap:1.2rem; align-items:center; margin-top:.8rem; flex-wrap:wrap; }
+  .mat { border-radius:8px; display:flex; overflow:hidden; border:1px solid var(--edge); }
+  .mat div { display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:.85rem; color:#06201c; font-weight:700; }
+  .op { font-size:1.8rem; color:var(--dim); font-family:var(--mono); }
+  .mlabel { text-align:center; color:var(--dim); font-size:.85rem; margin-top:.4rem; }
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#030d0ff2; border-top:2px solid var(--tp);
+           padding:1.1rem 7vw; font-size:1rem; color:#c3d8d8; line-height:1.5; display:none; max-height:38vh; overflow:auto; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#2c4c52; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#2c4c52; font-size:.85rem; }
+  .namedrop { margin-top:1.8rem; font-size:1rem; color:var(--drop); font-family:var(--mono); }
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">Tensor Parallelism &amp; Collectives</div>
+  <h1>Split the <span class="tp">matrix</span>, not the layers —<br>then pay for it in <span class="host">all-reduces</span>.</h1>
+  <p class="sub">How <span class="nd" data-key="megatron">Megatron-LM</span> shards every layer across GPUs, why it demands <span class="nd" data-key="nvlink">NVLink</span>, and the collectives vocabulary (<span class="nd" data-key="all-reduce">all-reduce</span>, <span class="nd" data-key="reduce-scatter">reduce-scatter</span>, <span class="nd" data-key="alpha-beta">α-β model</span>) that makes the answer senior-grade.</p>
+  <div class="namedrop">→ advance · N speaker notes · hover amber terms for name-drop cards</div>
+</section>
+<div class="notes">Positioning sentence: pipeline parallelism splits the model by DEPTH (layers); tensor parallelism splits it by WIDTH (inside each layer). PP communicates rarely (stage boundaries); TP communicates constantly (inside every layer) — which drives everything else in this deck.</div>
+
+<!-- 2 CORE TRICK -->
+<section class="slide">
+  <div class="kicker">The Core Trick</div>
+  <h2>Two ways to cut Y = XW — and only one needs communication.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3>Column split (no comm)</h3>
+      <div class="mm">
+        <div><div class="mat"><div style="width:70px;height:70px;background:#9dd6cd">X</div></div><div class="mlabel">replicated</div></div>
+        <span class="op">×</span>
+        <div><div class="mat"><div style="width:40px;height:70px;background:var(--tp)">W₀</div><div style="width:40px;height:70px;background:#1b9c8a;color:#eaf4f4">W₁</div></div><div class="mlabel">split by columns</div></div>
+        <span class="op">=</span>
+        <div><div class="mat"><div style="width:40px;height:70px;background:var(--tp)">Y₀</div><div style="width:40px;height:70px;background:#1b9c8a;color:#eaf4f4">Y₁</div></div><div class="mlabel">each GPU owns a slice</div></div>
+      </div>
+    </div>
+    <div class="col card">
+      <h3>Row split (needs all-reduce)</h3>
+      <div class="mm">
+        <div><div class="mat"><div style="width:40px;height:70px;background:#9dd6cd">X₀</div><div style="width:40px;height:70px;background:#5fa8a0;color:#eaf4f4">X₁</div></div><div class="mlabel">input already split</div></div>
+        <span class="op">×</span>
+        <div><div class="mat" style="flex-direction:column"><div style="width:70px;height:35px;background:var(--tp)">W₀</div><div style="width:70px;height:35px;background:#1b9c8a;color:#eaf4f4">W₁</div></div><div class="mlabel">split by rows</div></div>
+        <span class="op">=</span>
+        <div><div class="mat"><div style="width:70px;height:70px;background:#ffb454">ΣYᵢ</div></div><div class="mlabel"><b class="host">all-reduce</b> partial sums</div></div>
+      </div>
+    </div>
+  </div>
+  <p class="sub">Each GPU holds <b>1/p of every weight matrix</b> and does 1/p of every <span class="nd" data-key="gemm">GEMM</span>. Column split yields disjoint output slices; row split yields <em>partial sums</em> that must be added across GPUs.</p>
+</section>
+<div class="notes">This slide is the whole mechanism. Column-parallel: Y = X[W₀|W₁] = [XW₀|XW₁] — outputs are disjoint slices, no comm needed yet. Row-parallel: X split column-wise times W split row-wise gives X₀W₀ + X₁W₁ — each GPU has a full-shaped but PARTIAL result; summing across GPUs is literally the definition of all-reduce. Megatron's genius is sequencing these two so communication happens only once per block — next slide.</div>
+
+<!-- 3 MEGATRON -->
+<section class="slide">
+  <div class="kicker">Megatron's Choreography</div>
+  <h2>Column-split, then row-split: one all-reduce per block.</h2>
+  <ul class="clean">
+    <li><b>MLP:</b> Y = GeLU(X·A)·B — split <b>A by columns</b> (GeLU applies locally, no comm!), <b>B by rows</b> → one <span class="nd" data-key="all-reduce">all-reduce</span> at the end</li>
+    <li><b>Attention:</b> heads are already independent — shard heads across GPUs; the output projection is row-split → one all-reduce</li>
+    <li><b>Total: 2 all-reduces forward + 2 backward per Transformer layer</b></li>
+  </ul>
+  <p class="sub">Why the order matters: column-first keeps the nonlinearity local. Row-first would need a sync <em>before</em> GeLU. <span class="nd" data-key="sequence-parallel">Sequence parallelism</span> upgrades this: swap each all-reduce for <span class="nd" data-key="reduce-scatter">reduce-scatter + all-gather</span> and shard the LayerNorm/dropout activations too.</p>
+  <div class="namedrop">cite: Shoeybi et al. 2019 (Megatron-LM) · Korthikanti et al. 2022 (sequence parallelism)</div>
+</section>
+<div class="notes">The exam-grade detail: GeLU(X·A) is elementwise, so if each GPU holds complete columns of X·A, it can apply GeLU without talking to anyone. That's why A is column-split. B is then row-split so its input (the column-sharded GeLU output) is already in the right layout — one all-reduce after B, done. Google-stack contrast worth dropping: in JAX you don't hand-write this — GSPMD/XLA inserts the collectives from sharding annotations.</div>
+
+<!-- 4 COLLECTIVES ZOO -->
+<section class="slide">
+  <div class="kicker">The Collectives Zoo</div>
+  <h2>Five verbs cover 95% of distributed ML.</h2>
+  <table>
+    <tr><th>Collective</th><th>Semantics</th><th>Canonical ML use</th></tr>
+    <tr><td>Broadcast</td><td>one rank's tensor → everyone</td><td>initial weight sync</td></tr>
+    <tr><td>All-gather</td><td>everyone's shard → everyone (concat)</td><td><span class="nd" data-key="fsdp">FSDP</span> param gather before a layer</td></tr>
+    <tr><td>Reduce-scatter</td><td>sum all, each rank keeps 1/p</td><td><span class="nd" data-key="zero">ZeRO</span> gradient sharding</td></tr>
+    <tr><td><b class="tp">All-reduce</b></td><td>sum all, everyone gets the total</td><td>DP gradients · TP partial sums</td></tr>
+    <tr><td>All-to-all</td><td>rank i's j-th shard → rank j</td><td>MoE expert routing</td></tr>
+  </table>
+  <p class="sub">The identity to recite: <span class="big" style="font-size:1.5rem">all-reduce = reduce-scatter + all-gather</span> — same total bytes, and splitting it is exactly how <span class="nd" data-key="sequence-parallel">sequence parallelism</span> and <span class="nd" data-key="zero">ZeRO</span> find their savings.</p>
+</section>
+<div class="notes">Implemented by NCCL on GPUs. Don't confuse collectives with in-model tensor ops: pooling aggregates WITHIN one tensor on one device (part of the model's math); all-reduce aggregates ACROSS devices (invisible to the model, same result as single-GPU). Masking isn't aggregation at all — it excludes positions (causal/padding masks). Same reduction semantics (sum/max), totally different layer of the stack.</div>
+
+<!-- 5 RING -->
+<section class="slide">
+  <div class="kicker">How All-Reduce Actually Runs</div>
+  <div class="big">2 · (p−1)/p · n bytes per GPU</div>
+  <div class="biglabel">Ring all-reduce: p−1 reduce-scatter steps + p−1 all-gather steps, each moving n/p bytes. Bandwidth-optimal — cost per GPU is ~2n regardless of cluster size.</div>
+  <p class="sub">Each GPU only ever talks to its two ring neighbors, so every link runs at full tilt simultaneously. Popularized for ML by Baidu, then Horovod; it's what <span class="nd" data-key="nccl">NCCL</span> picks for large messages.</p>
+</section>
+<div class="notes">Walkthrough for p=4: chunk the tensor into 4. Reduce-scatter phase: 3 steps of "send one chunk to the right neighbor, add what arrives" — after 3 steps each GPU holds the fully-summed version of one chunk. All-gather phase: 3 more steps circulating the finished chunks. Total: each GPU sent 6 chunks of n/4 = 1.5n ≈ 2(p−1)/p·n. The magic: per-GPU traffic is independent of p — perfectly scalable in bandwidth. The catch is latency: 2(p−1) sequential steps — next slide.</div>
+
+<!-- 6 ALPHA-BETA -->
+<section class="slide">
+  <div class="kicker">The Cost Model Interviewers Love</div>
+  <h2>T(message) = α + β·n — latency plus bandwidth.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3>Ring</h3>
+      <p>T ≈ <b>2(p−1)·α</b> + 2((p−1)/p)·β·n<br><br>Bandwidth-optimal, but latency grows <b>linearly in p</b>. Wins for <b>big tensors</b>.</p>
+    </div>
+    <div class="col card">
+      <h3>Tree</h3>
+      <p>T ≈ <b>α·log p</b> + (worse β term)<br><br>Latency-optimal. Wins for <b>small tensors</b> and giant p. <span class="nd" data-key="nccl">NCCL</span> switches automatically by size.</p>
+    </div>
+    <div class="col card">
+      <h3>Pipelined tree</h3>
+      <p>Chunk the message and stream it: broadcast drops from O((α+βn)·log p) to <b>O(α·log p + βn)</b> — the βn term stops paying the log p tax.</p>
+    </div>
+  </div>
+  <p class="sub">One sentence of <span class="nd" data-key="alpha-beta">α-β analysis</span> turns "we use all-reduce" into a staff-level answer.</p>
+</section>
+<div class="notes">α = per-message startup latency (µs-scale: software + link latency), β = seconds per byte (inverse bandwidth), n = bytes, p = ranks. The pipelined-broadcast result is the one from Elizabeth's screenshot: non-pipelined tree sends the WHOLE message down log p levels → (α+βn)log p; pipelining streams chunks so transmission overlaps across levels → α·log p + βn. Same trick as pipeline parallelism itself — micro-batching a message. Nice callback to make explicitly in an interview.</div>
+
+<!-- 7 WHY NVLINK -->
+<section class="slide">
+  <div class="kicker">Why TP Stays Inside the Node</div>
+  <h2>TP communicates per layer. PP communicates per stage. That's the whole placement rule.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3 class="host">TP traffic</h3>
+      <p>2 all-reduces of <b>batch × seq × hidden</b> per layer, every layer, forward and backward — and compute <em>waits</em> on them. Needs <span class="nd" data-key="nvlink">NVLink</span>'s 900 GB/s → <b>TP degree ≤ 8, inside one node</b>.</p>
+    </div>
+    <div class="col card">
+      <h3 class="host">PP traffic</h3>
+      <p>One activation tensor per micro-batch at each stage boundary, point-to-point. Survives 400 Gb/s <span class="nd" data-key="infiniband">InfiniBand</span> → <b>PP crosses nodes</b>.</p>
+    </div>
+  </div>
+  <p class="sub">Cluster recipe: <b class="tp">TP=8 inside the node</b> · PP across nodes · <span class="nd" data-key="data-parallel">DP</span>/<span class="nd" data-key="zero">ZeRO</span> across replicas = 3D parallelism.</p>
+</section>
+<div class="notes">Worked number: Llama-70B-ish layer, batch 8 × seq 4096 × hidden 8192 in BF16 ≈ 0.5 GB per activation tensor; two all-reduces per layer × 80 layers × fwd+bwd — this traffic is why 64 GB/s PCIe would strangle TP but 900 GB/s NVLink doesn't. Also mention comm/compute overlap: modern stacks fuse the all-reduce into the GEMM epilogue or overlap with the next kernel (async TP). TPU contrast: ICI mesh bandwidth is uniform across a pod, so the in-node/cross-node cliff mostly disappears — sharding choices differ.</div>
+
+<!-- 8 NUMBERS -->
+<section class="slide">
+  <div class="kicker">Back-of-the-Envelope Kit</div>
+  <h2>Numbers that make TP answers concrete.</h2>
+  <table>
+    <tr><th>Quantity</th><th>Value</th><th>Why it matters</th></tr>
+    <tr><td>Ring all-reduce traffic</td><td class="num">2(p−1)/p · n ≈ 2n</td><td>per-GPU, independent of p</td></tr>
+    <tr><td>All-reduces per Transformer layer (TP)</td><td class="num">2 fwd + 2 bwd</td><td>the recurring NVLink tax</td></tr>
+    <tr><td>Typical TP degree</td><td class="num">8</td><td>= GPUs per NVLink domain</td></tr>
+    <tr><td>NVLink 4 vs InfiniBand NDR</td><td class="num">900 GB/s vs ~50 GB/s</td><td>the in-node/cross-node cliff</td></tr>
+    <tr><td>Weights per GPU under TP=p</td><td class="num">params/p</td><td>TP also shards memory, not just compute</td></tr>
+    <tr><td>α-β message cost</td><td class="num">α + β·n</td><td>ring = bandwidth king, tree = latency king</td></tr>
+  </table>
+</section>
+<div class="notes">Drill: "You have 16 nodes of 8×H100 and a 405B model — sketch the parallelism." Answer shape: TP=8 in-node (405B/8 ≈ 51 GB weights/GPU in BF16 — too big with optimizer state, so add PP), PP=4 or 8 across nodes, remaining factor DP with ZeRO-1, micro-batches sized to keep the bubble under ~10%. Being able to produce that sketch in 60 seconds is the L4→L5 jump.</div>
+
+<!-- 9 CLOSE -->
+<section class="slide">
+  <div class="kicker">The One-Breath Answer</div>
+  <h1 style="font-size:2.2rem">"Tensor parallelism shards every weight matrix across GPUs — Megatron-style column-then-row splits so each Transformer layer costs just two all-reduces — which run as bandwidth-optimal ring collectives moving 2(p−1)/p·n per GPU; that per-layer, compute-blocking traffic is why TP lives inside the NVLink domain while pipeline parallelism crosses nodes."</h1>
+  <p class="sub">Expand on demand: <span class="nd" data-key="megatron">Megatron splits</span> · <span class="nd" data-key="all-reduce">all-reduce</span> = <span class="nd" data-key="reduce-scatter">RS + AG</span> · <span class="nd" data-key="alpha-beta">α-β model</span> · <span class="nd" data-key="sequence-parallel">sequence parallelism</span> · <span class="nd" data-key="gspmd">GSPMD</span> (the Google way)</p>
+</section>
+<div class="notes">Rehearse with the equations: 2(p−1)/p·n, α+βn, 2 all-reduces/layer. The likely follow-ups: "why column before row?" (keep GeLU local), "why does TP stop at 8?" (NVLink domain boundary), "how would you do this in JAX?" (GSPMD sharding annotations — say this in a Google interview and watch the interviewer perk up).</div>
+
+
+<!-- INTERACTIVE (v2) -->
+<section class="slide">
+  <div class="kicker">🎛 Interactive · α-β Cost Model</div>
+  <h2>Ring vs tree: find the crossover yourself.</h2>
+  <div class="aiml-widget" data-calc="allreduce">
+    <div class="sl-row"><label>GPUs p</label><input type="range" data-k="p" min="2" max="128" step="1" value="8"><span class="sl-val" data-k="p"></span></div><div class="sl-row"><label>message size (log)</label><input type="range" data-k="logn" min="0" max="3.2" step="0.05" value="2"><span class="sl-val" data-k="logn"></span></div><div class="sl-row"><label>latency α per hop</label><input type="range" data-k="alpha" min="1" max="100" step="1" value="10"><span class="sl-val" data-k="alpha"></span></div><div class="sl-row"><label>link bandwidth</label><input type="range" data-k="bw" min="25" max="900" step="5" value="450"><span class="sl-val" data-k="bw"></span></div>
+    
+    <div class="wout"></div>
+  </div>
+  <p class="sub">Big message → ring wins (bandwidth-optimal). Tiny message or huge p → tree wins (log p latency). This is the α-β slide from your screenshot, made grabbable.</p>
+</section>
+<div class="notes">Demo: 100 MB at p=8 → ring comfortably ahead. Shrink to 1 MB → tree takes it (latency regime). Now p=128 with 100 MB → ring's 254α latency term starts to hurt. NCCL does this arithmetic per message automatically.</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">← → navigate · N notes · F fullscreen · hover amber = name-drop cards</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+let i=0;
+function show(n){ i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')show(i+1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+  else if(e.key.toLowerCase()==='n')document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.();
+});
+show(0);
+
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div>
+      <div class="t-row"><b>Why it matters:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect();
+    let x=r.left, y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20) x=innerWidth-tw-20;
+    if(y+th>innerHeight-20) y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

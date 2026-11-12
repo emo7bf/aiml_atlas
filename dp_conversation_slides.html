@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Still Waters · A Guided DP Conversation</title>
+<style>
+  :root {
+    /* Series identity, conversation variation: DAWN paper (cream → blueprint → sage → dawn) */
+    --bg: #fdf6ee; --panel: #ffffff; --edge: #e5d8c8;
+    --ink: #20242e; --dim: #76706a;
+    --dp: #c2410c;
+    --state: #4338ca; --trans: #be123c; --base: #0d9488;    /* series-constant trio */
+    --drop: #9a6700;
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { color:var(--ink); font-family:Georgia, serif; overflow:hidden; background:var(--bg);
+         background-image: radial-gradient(#e0cdb880 1px, transparent 1.4px);
+         background-size: 3.6vmin 3.6vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:5vh 7vw 8rem; flex-direction:column;
+           justify-content:center; justify-content:safe center; position:relative; overflow-y:auto; }
+  .slide.active { display:flex; animation: rise .5s ease; }
+  .slide::-webkit-scrollbar { width:11px; }
+  .slide::-webkit-scrollbar-track { background:#0000000a; border-radius:6px; }
+  .slide::-webkit-scrollbar-thumb { background:#c2410c4d; border-radius:6px; border:2px solid transparent; background-clip:content-box; }
+  .slide::-webkit-scrollbar-thumb:hover { background:#c2410c88; background-clip:content-box; }
+  @keyframes rise { from { opacity:0; transform:translateY(14px);} to { opacity:1; transform:none;} }
+  .kicker { color:var(--dp); font-size:.95rem; letter-spacing:.3em; text-transform:uppercase; margin-bottom:1rem;
+            font-weight:700; font-family:"Segoe UI", sans-serif; }
+  h1 { font-size:2.8rem; line-height:1.25; max-width:34ch; font-weight:700; }
+  h2 { font-size:1.8rem; line-height:1.35; margin-bottom:1rem; max-width:46ch; font-weight:700; }
+  .sub { color:var(--dim); font-size:1.1rem; margin-top:.9rem; max-width:72ch; line-height:1.6; font-family:"Segoe UI", sans-serif; }
+  .st { color:var(--state); font-weight:700; } .tr { color:var(--trans); font-weight:700; } .bc { color:var(--base); font-weight:700; }
+  /* dialogue beats */
+  .beat { display:none; margin:.6rem 0; max-width:78ch; font-family:"Segoe UI",sans-serif; }
+  .beat.on { display:block; animation: rise .45s ease; }
+  .beat.coach { background:#eef3ec; border:1px solid #c9dcc5; border-left:4px solid var(--base); border-radius:0 12px 12px 12px;
+                padding:.85rem 1.2rem; font-size:1.12rem; line-height:1.6; }
+  .beat.coach::before { content:"🪷 coach · "; color:var(--base); font-weight:700; font-size:.85rem; letter-spacing:.08em; }
+  .beat.you { background:transparent; border:2px dashed #cbbfae; border-radius:12px 0 12px 12px; padding:.75rem 1.2rem;
+              font-size:1.05rem; color:var(--dim); font-style:italic; margin-left:3rem; }
+  .beat.you::before { content:"you (out loud) · "; color:var(--dp); font-weight:700; font-style:normal; font-size:.85rem; }
+  .beat.reveal { background:#e9f6f1; border:1.5px solid var(--base); border-radius:12px; padding:.85rem 1.2rem;
+                 font-size:1.1rem; line-height:1.6; }
+  .beat.reveal b { color:#0b5e55; }
+  .beatHint { position:fixed; bottom:2.9rem; left:50%; transform:translateX(-50%); color:#8a7a64;
+              font-size:.85rem; font-family:"Segoe UI",sans-serif; background:#fdf6eecc; padding:.2rem .9rem;
+              border-radius:999px; border:1px solid #e5d8c8; backdrop-filter:blur(3px); z-index:40; }
+  .hint { background:#fdf6eecc; padding:.2rem .7rem; border-radius:999px; backdrop-filter:blur(3px); z-index:40; }
+  pre { background:#20242e; color:#e8ecf1; border-radius:10px; padding:.9rem 1.2rem; font-family:var(--mono);
+        font-size:.92rem; line-height:1.6; overflow-x:auto; max-width:840px; margin-top:.5rem; }
+  pre .cst{color:#a5b4fc;} pre .ctr{color:#fda4af;} pre .cbc{color:#5eead4;} pre .cmt{color:#8b95a7;}
+  table { border-collapse:collapse; font-size:1rem; width:100%; max-width:940px; font-family:"Segoe UI",sans-serif; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:.45rem 1rem .45rem 0; border-bottom:2px solid var(--edge); }
+  td { padding:.5rem 1rem .5rem 0; border-bottom:1px solid #f0e6d8; vertical-align:top; }
+  td.num { font-family:var(--mono); color:var(--dp); white-space:nowrap; }
+  /* stones + chips + arcs (shared pond language) */
+  .pond { position:relative; display:flex; align-items:flex-end; gap:1.4vmin; padding:2.6rem .8rem 2rem;
+          background: linear-gradient(180deg, #e9f1ea 0%, #d5e7e4 60%, #c7dde0 100%);
+          border-radius:16px; border:1px solid #c3d8d0; box-shadow: inset 0 6px 18px #ffffff90, inset 0 -10px 22px #9ec4c228;
+          width:fit-content; margin-top:.6rem; }
+  .pad-wrap { position:relative; display:flex; flex-direction:column; align-items:center;
+              animation: bob var(--bobdur,4s) ease-in-out var(--bobdel,0s) infinite; }
+  @keyframes bob { 0%,100%{transform:translateY(0) rotate(0);} 35%{transform:translateY(-4px) rotate(-1.4deg);} 70%{transform:translateY(2px) rotate(1deg);} }
+  .pad-wrap::after { content:""; position:absolute; bottom:-9px; width:70%; height:9px; border-radius:50%;
+          background: radial-gradient(ellipse, #7fb4ae50 0%, transparent 70%); }
+  .pad-wrap svg { filter: drop-shadow(0 3px 3px #4a6e5530); }
+  .chip { position:absolute; top:32%; font-family:var(--mono); font-weight:700; font-size:.95rem; padding:.08rem .5rem;
+          border-radius:999px; border:1.5px solid; background:#ffffffee; opacity:0; transform:translateY(8px) scale(.8);
+          transition: opacity .45s, transform .45s; }
+  .chip.on { opacity:1; transform:none; }
+  .chip.b{color:#0b5e55;border-color:var(--base);} .chip.v{color:var(--state);border-color:var(--state);}
+  .chip.hl{color:var(--trans);border-color:var(--trans);box-shadow:0 0 0 3px #be123c22;}
+  .padlabel { margin-top:.8rem; font-family:"Segoe UI",sans-serif; font-size:.74rem; color:#5d7a74; text-align:center; }
+  .pondsvg { position:absolute; inset:0; pointer-events:none; overflow:visible; }
+  .hoparc { fill:none; stroke-width:2.4; stroke-linecap:round; stroke-dasharray:1; stroke-dashoffset:1;
+            transition: stroke-dashoffset .5s ease, opacity .4s; }
+  .hoparc.draw { stroke-dashoffset:0; }
+  .hoparc.one { stroke:var(--trans); } .hoparc.two { stroke:var(--state); }
+  /* coin strip */
+  .strip { display:flex; gap:.5rem; margin-top:.6rem; }
+  .scell { width:4rem; height:3.3rem; border-radius:8px; border:1.5px solid var(--edge); background:var(--panel);
+           display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:var(--mono);
+           opacity:0; transform:translateY(10px); transition:.45s; }
+  .scell.on { opacity:1; transform:none; }
+  .scell small { color:var(--dim); font-size:.68rem; font-family:"Segoe UI",sans-serif; }
+  .scell.b{border-color:var(--base); background:#e9f6f1;} .scell.v{border-color:var(--state); background:#efeefb;}
+  .scell.hl{border-color:var(--trans); background:#fdeef1;}
+  /* stars */
+  .star { position:absolute; pointer-events:none; animation: twinkle var(--twdur,3.4s) ease-in-out var(--twdel,0s) infinite; }
+  .star path { fill:var(--starcol,#d9a441); opacity:.5; } .star .dot { fill:var(--starcol,#d9a441); opacity:.35; }
+  @keyframes twinkle { 0%,100%{transform:scale(1) rotate(0);opacity:.5;} 50%{transform:scale(1.16) rotate(6deg);opacity:.9;} }
+  /* audio FAB bottom-right */
+  #audiofab { position:fixed; bottom:1rem; right:1.2rem; z-index:120; font-family:"Segoe UI",sans-serif; }
+  #audiofab .fabbtn { background:#f4f3eced; color:#2a2d33; border:1px solid #b9b5a4; border-radius:4px;
+      padding:.45rem .9rem; font-size:.9rem; cursor:pointer; }
+  #audiofab .fabbtn:hover { background:#fffef8; }
+  #audiofab .fabpanel { display:none; position:absolute; bottom:2.8rem; right:0; width:270px; background:#f7f6f0fa;
+      border:1px solid #b9b5a4; border-radius:4px; padding:.9rem 1rem; box-shadow:0 10px 34px #00000030; }
+  #audiofab.open .fabpanel { display:block; }
+  #audiofab .arow { display:flex; align-items:center; justify-content:space-between; margin:.45rem 0; font-size:.9rem; color:#2a2d33; }
+  #audiofab select, #audiofab input[type=range] { font-size:.85rem; }
+  #audiofab .toggle { cursor:pointer; border:1px solid #b9b5a4; border-radius:3px; padding:.12rem .6rem; background:#fff; }
+  #audiofab .toggle.on { background:#0d9488; color:#fff; border-color:#0d9488; }
+  #audiofab .asmall { font-size:.72rem; color:#6d6a5c; margin-top:.4rem; line-height:1.4; }
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#20242ef5; border-top:2px solid var(--dp); padding:1rem 7vw;
+           font-size:1rem; color:#dfe3ea; line-height:1.5; display:none; max-height:38vh; overflow:auto; font-family:"Segoe UI",sans-serif; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#c4b096; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#c4b096; font-size:.85rem; font-family:"Segoe UI",sans-serif; }
+</style>
+</head>
+<body>
+
+<!-- 1 WELCOME -->
+<section class="slide active">
+  <div class="kicker">🕊 Still Waters · A Guided DP Conversation</div>
+  <h1>We'll think <span class="bc">slowly</span>, on purpose.</h1>
+  <p class="sub">This is a dialogue, not a lecture. Press <b>→</b> and one thought appears at a time: I ask, you answer <em>out loud</em>, then the reveal. Two toy problems — the second one will betray your instincts just enough to prove why DP must exist.</p>
+  <p class="sub">🎛 <b>Bottom-right</b>: the audio room. A soothing voice can read the coach's lines; harps (no percussion, a lazy calypso sway) can play underneath, easing into classical as we go. Everything off by default — your pond, your rules.</p>
+  <div class="pond" id="pondAmb"></div>
+</section>
+<div class="notes">Format notes: beats advance with → (within a slide) before the slide itself advances. Voice uses the browser's speech synthesis on coach beats only. Music is generated live with WebAudio — plucked triangle-wave 'harp' arpeggios, swung gently (calypso lilt, zero percussion), later shifting to slower classical broken chords. All synthesized: zero audio files, instant load.</div>
+
+<!-- 2 NAMING -->
+<section class="slide">
+  <div class="kicker">First · The Words on the Whiteboard</div>
+  <h2>Naming conventions — so the vocabulary never rattles you.</h2>
+  <table>
+    <tr><th>You'll see</th><th>It means</th></tr>
+    <tr><td class="num">dp, dp[i], dp[i][j]</td><td><b>THE table</b> — yes, your instinct is right: <span class="st">dp is the state array</span>; dp[state] holds that subproblem's <em>answer</em>. The name is literally short for "dynamic programming." Out loud, call it "the table."</td></tr>
+    <tr><td class="num">memo, cache</td><td>the dictionary used by <b>top-down</b> (memoized) solutions — same answers as dp, filled lazily by recursion instead of a loop</td></tr>
+    <tr><td class="num">@cache / @lru_cache</td><td>Python's built-in memoizer — a decorator that gives any function a memo for free</td></tr>
+    <tr><td class="num">f(i), OPT(i)</td><td>textbook/paper notation for the same idea as dp[i] — MIT's <span class="nd" data-key="srtbot">SRTBOT</span> lectures write subproblems as functions</td></tr>
+    <tr><td class="num">i, j, k · n, m · W</td><td>state <b>indices</b> · input <b>sizes</b> · a <b>budget/capacity</b>. Rule: say what each letter means in English before using it</td></tr>
+    <tr><td class="num">state space</td><td>the set of ALL states; its size × transition cost = your runtime</td></tr>
+    <tr><td class="num">recurrence / transition</td><td>two names, one formula — how small answers combine into bigger ones</td></tr>
+    <tr><td class="num">top-down / bottom-up</td><td>= memoization / <span class="nd" data-key="memoization">tabulation</span> — the two dialects, same language</td></tr>
+  </table>
+</section>
+<div class="notes">The dp-is-the-table confirmation is deliberate — she asked. Worth adding verbally: in interviews ANY clear name works (best, ways, cost) as long as you state the meaning; dp[] is just the lingua franca of editorial solutions. OPT() appears in Kleinberg-Tardos; f() in Demaine.</div>
+
+<!-- 3 STONES DIALOGUE -->
+<section class="slide">
+  <div class="kicker">Toy One · Stepping Stones</div>
+  <h2>Six stones. Steps of +1 or +2. How many ways across?</h2>
+  <div class="beat coach" data-say="Here's our pond. Six stones, zero to five. You may step forward one stone, or two. Before anything else — and there is no rush — finish this sentence for me: dp of i equals...">
+    Six stones, 0 → 5. Steps of +1 or +2. No rush at all. Finish this sentence: <span class="st">dp[i] = …</span></div>
+  <div class="beat you">…say your sentence before advancing. (A value, not a decision — remember the heist.)</div>
+  <div class="beat reveal" data-say="dp of i is the number of distinct ways to reach stone i. A value. A count. Something a smaller version of the question would hand back.">
+    <b class="st">dp[i] = the number of distinct ways to reach stone i.</b> A value — something a smaller version of the question hands back.</div>
+  <div class="beat coach" data-say="Now the transition. Don't invent anything. Just stand on stone i and look backward: what was the very last step that landed you here?">
+    Now the <span class="tr">transition</span>. Stand on stone i, look <em>backward</em>: what was the very <b>last step</b> that landed you here?</div>
+  <div class="beat reveal" data-fx="stoneArcs" data-say="It came from stone i minus 1, or stone i minus 2. There are no other doors. So dp of i equals dp of i minus 1, plus dp of i minus 2. Watch the arcs — every stone is fed by exactly two.">
+    It came from <b>i−1</b> (rose arcs) or <b>i−2</b> (indigo arcs). No other doors exist. So <span class="tr">dp[i] = dp[i−1] + dp[i−2]</span> — watch each stone get fed by exactly its two:</div>
+  <div class="beat coach" data-say="Bases, order, space — the housekeeping. Where does the recursion stop, which direction do we fill, and how much of the table must we actually keep?">
+    Housekeeping: <span class="bc">bases</span>? order? space?</div>
+  <div class="beat reveal" data-say="Bases: one way to stand at the start, one way to reach stone 1. Order: left to right, so dependencies are ready before we need them. And space — each stone only looks two behind, so we keep a window of two numbers, not the whole pond.">
+    <span class="bc">dp[0] = 1, dp[1] = 1</span> · order: left→right (dependencies ready before use) · space: each stone looks only <b>2 back</b> → keep a window of two variables, O(1), not the whole pond.</div>
+  <div class="pond" id="pondStones"></div>
+</section>
+<div class="notes">The arcs ARE the recurrence this time — rose = the +1 step, indigo = the +2 step, drawn into each stone as its count appears. This replaces the old misrepresenting frog: now the animation shows ALL incoming options, which is exactly what the sum means. Counts: 1,1,2,3,5,8.</div>
+
+<!-- 4 GREEDY TRAP -->
+<section class="slide">
+  <div class="kicker">Toy Two · Market Day (where instinct fails)</div>
+  <h2>Mango tokens worth 1, 3, and 4. Pay exactly 6 — fewest tokens.</h2>
+  <div class="beat coach" data-say="New stall, new rules. Tokens worth one, three, and four. You owe exactly six. Your instinct — everyone's instinct — says grab the biggest token first. Indulge it. What does greedy pay?">
+    Tokens: 🪙1 · 🪙3 · 🪙4. You owe <b>exactly 6</b>. Instinct says <em>biggest token first</em>. Indulge it — what does greedy pay?</div>
+  <div class="beat you">…work greedy by hand before advancing: take 4, then what?</div>
+  <div class="beat reveal" data-say="Greedy takes the four. Six minus four leaves two — and no token of two exists, so it takes one and one. Three tokens total.">
+    Greedy: take <b>4</b> → owe 2 → no 2-token exists → <b>1 + 1</b>. Total: <b>three tokens</b> (4+1+1). Feels fine, doesn't it.</div>
+  <div class="beat coach" data-say="Sit with this question: can you beat three?">Can you beat three? Sit with it.</div>
+  <div class="beat reveal" data-say="Three plus three. Two tokens. Greedy lied — politely, confidently, the way it always does.">
+    <b>3 + 3 = 6. Two tokens.</b> Greedy lied — politely, confidently, the way it always does.</div>
+  <div class="beat coach" data-say="This is the moment dynamic programming earns its existence. Greedy trusted one locally-best choice. But the best first token is not always part of the best full payment. D P refuses to trust any single choice — it asks every amount, from zero up, what its own best answer is, and only ever builds on proven answers.">
+    <b>This is the moment DP earns its existence.</b> The best <em>first</em> choice ≠ part of the best <em>whole</em>. DP refuses to trust any single choice — it asks <em>every amount</em> what its best answer is, and builds only on proven answers.</div>
+</section>
+<div class="notes">Coins {1,3,4}, amount 6 is the canonical minimal greedy-failure example. If probed "when IS greedy safe?": canonical coin systems (like US coins) have the greedy-choice property; proving it is nontrivial — which is exactly why DP is the default and greedy needs justification. This slide is the 'prove the need' beat she asked for.</div>
+
+<!-- 5 COINS SOLVED -->
+<section class="slide">
+  <div class="kicker">Toy Two · Solved, Calmly</div>
+  <h2>Every amount gets its own answer. Watch them earn it.</h2>
+  <div class="beat coach" data-say="Run our five questions. State first — one sentence.">
+    Our five questions. <span class="st">State</span> — one sentence.</div>
+  <div class="beat reveal" data-say="dp of a is the fewest tokens that pay exactly amount a.">
+    <b class="st">dp[a] = the fewest tokens that pay exactly amount a.</b></div>
+  <div class="beat coach" data-say="Transition: condition on the last token you hand over.">
+    <span class="tr">Transition</span>: condition on the <b>last token</b> you hand over.</div>
+  <div class="beat reveal" data-fx="coinFill" data-say="If the last token was worth c, then before it you owed a minus c — and you'd have paid THAT optimally. So dp of a is one plus the minimum over every token c of dp of a minus c. Base: amount zero costs zero tokens. Order: amounts ascending. Watch the strip fill.">
+    Last token = c ⇒ before it you owed a−c, paid <em>optimally</em>. <span class="tr">dp[a] = 1 + min over c of dp[a−c]</span> · <span class="bc">dp[0] = 0</span> · order: amounts ascending ⤵</div>
+  <div class="strip" id="coinStrip"></div>
+  <div class="beat reveal">
+    <pre><span class="cmt"># tabulated — your preferred dialect, and the right one here</span>
+def fewest_tokens(tokens, amount):
+    INF = float("inf")
+    <span class="cbc">fewest = [0] + [INF] * amount</span>          <span class="cmt"># BASE: amount 0 costs 0 tokens</span>
+    for owed in range(1, amount + 1):       <span class="cmt"># ORDER: every amount, ascending</span>
+        for c in tokens:
+            if c &lt;= owed:
+                <span class="ctr">fewest[owed] = min(fewest[owed], 1 + fewest[owed - c])</span>
+    return fewest[amount]
+
+fewest_tokens([1, 3, 4], 6)   # -> 2   (3 + 3 — the answer greedy never saw)</pre>
+    Note the ascending loop: tokens are <b>reusable</b>, so today's row may feed itself — the Garden's knapsack ran <em>descending</em> for exactly the opposite reason.</div>
+</section>
+<div class="notes">dp strip: [0,1,1,1,2,2,2] for amounts 0..6 — dp[6]=2 highlighted rose. The ascending-vs-descending callback to the Garden's Rep 5 is the deliberate thread: reuse allowed → ascending (coin change); use-once → descending (0/1 knapsack).</div>
+
+<!-- 6 STRATEGY -->
+<section class="slide">
+  <div class="kicker">Strategy &amp; Staging · Choosing Your Dialect</div>
+  <h2>Memoize or tabulate? Here's the honest decision rule.</h2>
+  <div class="beat coach" data-say="You told me you tend to tabulate. That's a good default — let's make the reasons yours again, and name when the other dialect wins.">
+    You tend to tabulate. Good default. Let's make the <em>reasons</em> yours again — and name when the other dialect wins.</div>
+  <div class="beat reveal" data-say="Tabulation's advantages: no recursion depth limit — Python dies near a thousand frames. The filling order is explicit, so bugs surface honestly. Space optimization is natural — keep just the window. And plain loops run fast and cache friendly.">
+    <b>Tabulation wins because:</b> ① no Python recursion limit (~1000 frames) ② the order is <em>explicit</em> — dependency bugs surface honestly ③ space-optimization is natural (keep the window: two variables, one row) ④ plain loops are fast & cache-friendly.</div>
+  <div class="beat reveal" data-say="Memoization wins when the state space is huge but sparsely visited — the cache only computes states you actually need. And when the natural order is hard to see — intervals, trees, digits — the recursion finds the order for you.">
+    <b>Memoization wins when:</b> ① the state space is huge but <em>sparsely visited</em> (cache computes only what's needed) ② the filling order is hard to see — intervals, trees, digit DP (Part 3 territory) — recursion finds the order for you.</div>
+  <div class="beat coach" data-say="And the staging — how you sequence it live, in the room.">And the staging, live in the room:</div>
+  <div class="beat reveal" data-say="One: restate the problem and test a tiny case. Two: say the brute recursion out loud. Three: point at the overlapping work. Four: memoize it — correctness first. Five: convert to a table, narrating the order. Six: shrink the table to its window. Seven: complexity — states times transition. That staircase, every time.">
+    <b>The staircase, every time:</b> ① restate + tiny example → ② brute recursion <em>aloud</em> → ③ point at the overlap → ④ memoize (correctness first) → ⑤ convert to a table, narrating order → ⑥ shrink to the window → ⑦ complexity = <span class="nd" data-key="dp-complexity">states × transition</span>.</div>
+</section>
+<div class="notes">This slide is the "extensive considerations" panel she asked for, in dialogue form. The staging staircase doubles as the interview script — steps ④→⑤ are where you show range; many candidates can only do one dialect.</div>
+
+<!-- 7 CLOSE -->
+<section class="slide">
+  <div class="kicker">🕊 Still Waters · Rest</div>
+  <h1 style="font-size:2.1rem">Same five questions. Every pond, every market, every table.</h1>
+  <p class="sub"><span class="st">State in one sentence</span> → <span class="tr">condition on the last decision</span> → <span class="bc">bases by hand</span> → order (or let memo find it) → states × transition. Greedy asks permission; DP checks everything — gently, once, and writes it down.</p>
+  <p class="sub">When you're ready: the Garden for reps, the playground for cold writing, Part 3 for the exotic states. No rush. The pond isn't going anywhere.</p>
+</section>
+<div class="notes">Closing is deliberately low-cortisol per the study doctrine's confidence-building close. Next prescriptions if asked: coin change variants (count ways — order matters vs not!), then Part 3.</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">→ next thought · ← previous slide · N notes · 🎛 bottom-right for voice & music</div>
+<div class="beatHint" id="beatHint">→ for the next thought…</div>
+
+<!-- audio controls -->
+<div id="audiofab">
+  <button class="fabbtn">🎛 audio</button>
+  <div class="fabpanel">
+    <div class="arow"><span>🗣 Voice (reads the coach)</span><span class="toggle" id="tVoice">off</span></div>
+    <div class="arow"><span>🎶 Music</span><span class="toggle" id="tMusic">off</span></div>
+    <div class="arow"><span>Style</span>
+      <select id="mStyle"><option value="harp">Harps & calypso sway</option><option value="classical">Classical</option>
+        <option value="musicbox">Music box</option><option value="nocturne">Nocturne (minor, slow)</option></select></div>
+    <div class="arow"><span>Auto-shift to classical</span><span class="toggle on" id="tAuto">on</span></div>
+    <div class="arow"><span>Volume</span><input type="range" id="mVol" min="0" max="100" value="45" style="width:110px"></div>
+    <div class="asmall">All sound is generated live in your browser — no files, no percussion, no surprises. Voice uses your system's speech voices.</div>
+  </div>
+</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+
+/* ---------- lily pads (organic, seeded — same flora as the Garden) ---------- */
+function mulberry32(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0;
+  let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function makePad(rng,px){
+  const uid="lg"+Math.floor(rng()*1e9), hue=96+rng()*54, sat=42+rng()*26, l1=34+rng()*10, l2=l1+16;
+  const notch=rng()*360, tilt=(rng()-.5)*24, R=44, N=11, pts=[];
+  for(let k=0;k<N;k++){ const a=(notch+k*(320/(N-1)))*Math.PI/180, r=R*(.84+rng()*.28);
+    pts.push([r*Math.cos(a), r*Math.sin(a)]); }
+  let d=`M0 0 L${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  for(let k=1;k<N;k++){ const mx=((pts[k-1][0]+pts[k][0])/2).toFixed(1), my=((pts[k-1][1]+pts[k][1])/2).toFixed(1);
+    d+=` Q${pts[k-1][0].toFixed(1)} ${pts[k-1][1].toFixed(1)} ${mx} ${my}`; }
+  d+=` L${pts[N-1][0].toFixed(1)} ${pts[N-1][1].toFixed(1)} Z`;
+  let veins=""; const nv=4+Math.floor(rng()*3);
+  for(let k=0;k<nv;k++){ const a=(notch+45+k*(270/(nv-1))+(rng()-.5)*14)*Math.PI/180;
+    veins+=`<line x1="0" y1="0" x2="${(Math.cos(a)*R*.82).toFixed(1)}" y2="${(Math.sin(a)*R*.82).toFixed(1)}" stroke="hsl(${hue} ${sat}% ${l1-9}%)" stroke-width="${(1+rng()).toFixed(1)}" opacity=".45" stroke-linecap="round"/>`; }
+  return `<svg width="${px}" height="${px}" viewBox="-52 -52 104 104" style="transform:rotate(${tilt.toFixed(0)}deg)">
+    <defs><radialGradient id="${uid}" cx="38%" cy="34%"><stop offset="0%" stop-color="hsl(${hue} ${sat+16}% ${l2}%)"/><stop offset="100%" stop-color="hsl(${hue} ${sat}% ${l1}%)"/></radialGradient></defs>
+    <path d="${d}" fill="url(#${uid})" stroke="hsl(${hue} ${sat}% ${l1-12}%)" stroke-width="1.4"/>${veins}</svg>`;
+}
+function renderPond(id, n, counts, seed){
+  const pond=document.getElementById(id); if(!pond) return;
+  const rng=mulberry32(seed);
+  pond.innerHTML="";
+  for(let c=0;c<n;c++){
+    const w=document.createElement("div"); w.className="pad-wrap";
+    w.style.setProperty("--bobdur",(3.4+rng()*2.2).toFixed(2)+"s");
+    w.style.setProperty("--bobdel",(-rng()*4).toFixed(2)+"s");
+    w.innerHTML=makePad(rng,58+Math.floor(rng()*24))+
+      (counts?`<span class="chip ${c<2?"b":(c===n-1?"hl":"v")}" data-step="${c}">${counts[c]}</span>`:"")+
+      (counts?`<span class="padlabel">stone ${c}</span>`:"");
+    pond.appendChild(w);
+  }
+}
+renderPond("pondAmb", 4, null, 1159);
+renderPond("pondStones", 6, [1,1,2,3,5,8], 20261026);
+
+/* stones arcs: into each stone i, draw the +1 (rose) and +2 (indigo) feeds, then reveal its count */
+let stoneTimers=[];
+function stoneArcs(){
+  const pond=document.getElementById("pondStones");
+  stoneTimers.forEach(clearTimeout); stoneTimers=[];
+  pond.querySelector(".pondsvg")?.remove();
+  pond.querySelectorAll(".chip").forEach(ch=>ch.classList.remove("on"));
+  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.setAttribute("class","pondsvg"); pond.appendChild(svg);
+  const pads=[...pond.querySelectorAll(".pad-wrap")];
+  const cx=p=>p.offsetLeft+p.offsetWidth/2, cy=p=>p.offsetTop+14;
+  function arc(a,b,cls){ const x1=cx(pads[a]),x2=cx(pads[b]),y=cy(pads[a]);
+    const p=document.createElementNS("http://www.w3.org/2000/svg","path");
+    p.setAttribute("d",`M${x1} ${y} Q${(x1+x2)/2} ${y-34-(b-a)*10} ${x2} ${cy(pads[b])}`);
+    p.setAttribute("class","hoparc "+cls); p.setAttribute("pathLength","1"); svg.appendChild(p);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>p.classList.add("draw"))); }
+  // bases first
+  stoneTimers.push(setTimeout(()=>pond.querySelector('[data-step="0"]').classList.add("on"),300));
+  stoneTimers.push(setTimeout(()=>pond.querySelector('[data-step="1"]').classList.add("on"),650));
+  for(let s=2;s<6;s++){
+    stoneTimers.push(setTimeout(()=>{ arc(s-1,s,"one"); arc(s-2,s,"two"); },1000+(s-2)*950));
+    stoneTimers.push(setTimeout(()=>pond.querySelector(`[data-step="${s}"]`).classList.add("on"),1550+(s-2)*950));
+  }
+}
+
+/* coin strip: amounts 0..6, dp = 0,1,1,1,2,2,2 */
+(function(){ const strip=document.getElementById("coinStrip"), dp=[0,1,1,1,2,2,2];
+  for(let a=0;a<=6;a++){ const d=document.createElement("div");
+    d.className="scell "+(a===0?"b":(a===6?"hl":"v"));
+    d.innerHTML=`<b>${dp[a]}</b><small>amount ${a}</small>`; strip.appendChild(d); } })();
+let coinTimers=[];
+function coinFill(){ coinTimers.forEach(clearTimeout); coinTimers=[];
+  const cells=[...document.querySelectorAll("#coinStrip .scell")];
+  cells.forEach(c=>c.classList.remove("on"));
+  cells.forEach((c,k)=>coinTimers.push(setTimeout(()=>c.classList.add("on"),400+k*450))); }
+const FX={stoneArcs, coinFill};
+
+/* ---------- stars ---------- */
+function sprinkleStars(section,n,rng){ for(let k=0;k<n;k++){ const s=document.createElement("span"); s.className="star";
+  const sz=14+rng()*28;
+  s.style.cssText=`left:${8+rng()*84}%; top:${5+rng()*28}%; width:${sz}px; height:${sz}px; --twdur:${(2.6+rng()*2.6).toFixed(2)}s; --twdel:${(-rng()*4).toFixed(2)}s; --starcol:${rng()<.5?"#d9a441":"#c2410c"}`;
+  s.innerHTML=`<svg viewBox="-50 -50 100 100" width="100%" height="100%"><path d="M0,-46 L6.5,-6.5 L46,0 L6.5,6.5 L0,46 L-6.5,6.5 L-46,0 L-6.5,-6.5 Z"/><circle class="dot" cx="${(rng()*50-25).toFixed(0)}" cy="${(rng()*40-30).toFixed(0)}" r="2.3"/></svg>`;
+  section.appendChild(s); } }
+const srng=mulberry32(777);
+sprinkleStars(slides[0],5,srng); sprinkleStars(slides[slides.length-1],6,srng);
+
+/* ---------- Voice ---------- */
+const Voice={on:false,
+  speak(txt){ if(!this.on||!window.speechSynthesis) return; speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(txt); u.rate=.92; u.pitch=1.0; u.volume=.95;
+    const vs=speechSynthesis.getVoices();
+    u.voice=vs.find(v=>/en/i.test(v.lang)&&/aria|jenny|natural|libby|sonia|zira|female/i.test(v.name))||vs.find(v=>/^en/i.test(v.lang))||null;
+    speechSynthesis.speak(u); },
+  stop(){ window.speechSynthesis&&speechSynthesis.cancel(); }};
+
+/* ---------- Music: generated harp/calypso -> classical, no percussion ---------- */
+const Music={ctx:null,gain:null,timer:null,style:"harp",auto:true,on:false,vol:.45,barIdx:0,
+  ensure(){ if(!this.ctx){ this.ctx=new (window.AudioContext||window.webkitAudioContext)();
+    this.gain=this.ctx.createGain(); this.gain.connect(this.ctx.destination);} this.gain.gain.value=this.vol*.5; },
+  start(){ this.ensure(); if(this.ctx.state==="suspended") this.ctx.resume(); this.on=true; this.loop(); },
+  stop(){ this.on=false; clearTimeout(this.timer); },
+  pluck(f,t,dur,v){ const c=this.ctx,o=c.createOscillator(),g=c.createGain(),fl=c.createBiquadFilter();
+    o.type="triangle"; o.frequency.value=f; fl.type="lowpass"; fl.frequency.value=2200; fl.Q.value=.5;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.2*v,t+.012);
+    g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+    o.connect(fl); fl.connect(g); g.connect(this.gain); o.start(t); o.stop(t+dur+.1); },
+  loop(){ if(!this.on) return;
+    const t=this.ctx.currentTime+.08;
+    const PAT={ // harp: pentatonic-leaning arpeggios with a lazy calypso sway (swung offsets, zero drums)
+      harp:{bar:2.7, dur:1.9, prog:[[261.6,329.6,392,523.3,659.3],[220,329.6,440,523.3,659.3],
+             [174.6,261.6,349.2,440,523.3],[196,293.7,392,493.9,587.3]],
+            offs:[0,.38,.64,1.02,1.36,1.7,2.02,2.34]},
+      // classical: slower broken chords, I–V6–vi–IV–I-ish, gentle
+      classical:{bar:3.6, dur:2.6, prog:[[261.6,329.6,392,523.3],[246.9,293.7,392,493.9],
+             [220,261.6,329.6,440],[174.6,220,261.6,349.2],[196,246.9,293.7,392]],
+            offs:[0,.45,.9,1.35,1.8,2.25,2.7,3.15]},
+      // music box: high, sparse, bell-like
+      musicbox:{bar:3.2, dur:1.1, prog:[[523.3,659.3,784,1046.5],[440,523.3,659.3,880],
+             [392,493.9,587.3,784],[523.3,659.3,784,1046.5]],
+            offs:[0,.55,1.05,1.65,2.2,2.7]},
+      // nocturne: minor, slow, long sustains
+      nocturne:{bar:4.4, dur:3.4, prog:[[220,261.6,329.6,440],[174.6,220,261.6,349.2],
+             [164.8,196,246.9,329.6],[196,246.9,293.7,392],[220,261.6,329.6,440]],
+            offs:[0,.62,1.25,1.9,2.55,3.2,3.8]}}[this.style];
+    const chord=PAT.prog[this.barIdx++%PAT.prog.length];
+    PAT.offs.forEach((o,k)=>{ const up=k>=chord.length?2:1;
+      this.pluck(chord[k%chord.length]*up, t+o, PAT.dur, .95-k*.07); });
+    this.timer=setTimeout(()=>this.loop(), PAT.bar*1000); }};
+
+/* ---------- audio panel wiring ---------- */
+const fab=document.getElementById("audiofab");
+fab.addEventListener("click",e=>{ e.stopPropagation(); if(e.target.closest(".fabbtn")) fab.classList.toggle("open"); });
+document.addEventListener("click",()=>fab.classList.remove("open"));
+function wireToggle(id,onChange){ const el=document.getElementById(id);
+  el.addEventListener("click",()=>{ el.classList.toggle("on"); el.textContent=el.classList.contains("on")?"on":"off"; onChange(el.classList.contains("on")); }); }
+wireToggle("tVoice",v=>{ Voice.on=v; if(!v) Voice.stop(); else Voice.speak("Hello. I'll read the coach's lines. Take your time."); });
+wireToggle("tMusic",v=>{ v?Music.start():Music.stop(); });
+wireToggle("tAuto",v=>{ Music.auto=v; });
+document.getElementById("mStyle").addEventListener("change",e=>{ Music.style=e.target.value; Music.auto=false;
+  document.getElementById("tAuto").classList.remove("on"); document.getElementById("tAuto").textContent="off"; });
+document.getElementById("mVol").addEventListener("input",e=>{ Music.vol=e.target.value/100; if(Music.gain) Music.gain.gain.value=Music.vol*.5; });
+
+/* ---------- beats + nav ---------- */
+const beatShown=slides.map(()=>0);
+function syncBeats(idx){ const bs=[...slides[idx].querySelectorAll(".beat")];
+  bs.forEach((b,k)=>b.classList.toggle("on",k<beatShown[idx]));
+  document.getElementById("beatHint").style.display = beatShown[idx]<bs.length ? "block":"none"; }
+function fireBeat(idx){ const bs=slides[idx].querySelectorAll(".beat"), b=bs[beatShown[idx]-1]; if(!b) return;
+  if(b.dataset.say) Voice.speak(b.dataset.say);
+  if(b.dataset.fx && FX[b.dataset.fx]) FX[b.dataset.fx](); }
+let i=0;
+function show(n){ Voice.stop();
+  i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length;
+  if(slides[i].querySelectorAll(".beat").length && beatShown[i]===0){ beatShown[i]=1; fireBeat(i); }
+  syncBeats(i);
+  if(Music.auto && Music.on && i>=5 && Music.style!=="classical"){ Music.style="classical";
+    document.getElementById("mStyle").value="classical"; }  // the promised later shift
+}
+function advance(){ const bs=slides[i].querySelectorAll(".beat");
+  if(beatShown[i]<bs.length){ beatShown[i]++; syncBeats(i); fireBeat(i); return; }
+  show(i+1); }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown') advance();
+  else if(e.key==='ArrowLeft'||e.key==='PageUp') show(i-1);
+  else if(e.key.toLowerCase()==='n') document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f') document.documentElement.requestFullscreen?.();
+});
+show(0);
+
+/* ---------- tooltips ---------- */
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div><div class="t-row"><b>Why:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect(); let x=r.left,y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20)x=innerWidth-tw-20; if(y+th>innerHeight-20)y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px'; });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

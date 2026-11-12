@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dynamic Programming for Beginners · Part 1</title>
+<style>
+  :root {
+    /* Identity: math-notebook graph paper */
+    --bg: #fbfbf6; --panel: #ffffff; --edge: #d9d7c8;
+    --ink: #20242e; --dim: #6b7078;
+    --dp: #c2410c;              /* topic accent: burnt orange (kickers) */
+    /* SEMANTIC trio — same colors on EVERY slide of the DP series: */
+    --state: #4338ca;           /* STATE: what a subproblem means  = indigo */
+    --trans: #be123c;           /* TRANSITION/recurrence           = rose   */
+    --base:  #0d9488;           /* BASE CASE                       = teal   */
+    --drop: #9a6700;            /* shared: name-drops = amber (dark for light bg) */
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { color:var(--ink); font-family:Georgia, "Times New Roman", serif; overflow:hidden;
+         background: var(--bg);
+         background-image: linear-gradient(#e8e6d890 1px, transparent 1px),
+                           linear-gradient(90deg, #e8e6d890 1px, transparent 1px);
+         background-size: 4vmin 4vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:6vh 7vw; flex-direction:column; justify-content:center; }
+  .slide.active { display:flex; }
+  .kicker { color:var(--dp); font-size:.95rem; letter-spacing:.3em; text-transform:uppercase; margin-bottom:1.2rem;
+            font-weight:700; font-family:"Segoe UI", sans-serif; }
+  h1 { font-size:3rem; line-height:1.2; max-width:32ch; font-weight:700; }
+  h2 { font-size:2.1rem; line-height:1.3; margin-bottom:1.6rem; max-width:40ch; font-weight:700; }
+  .sub { color:var(--dim); font-size:1.18rem; margin-top:1.2rem; max-width:68ch; line-height:1.6; font-family:"Segoe UI", sans-serif; }
+  .cols { display:flex; gap:1.6rem; align-items:stretch; }
+  .col { flex:1; }
+  .card { background:var(--panel); border-radius:12px; padding:1.3rem 1.5rem; border:1px solid var(--edge); box-shadow:2px 3px 0 #0001; }
+  .card h3 { font-size:1.12rem; margin-bottom:.5rem; }
+  .card p { color:var(--dim); font-size:1rem; line-height:1.55; font-family:"Segoe UI", sans-serif; }
+  .st { color:var(--state); font-weight:700; }   /* STATE */
+  .tr { color:var(--trans); font-weight:700; }   /* TRANSITION */
+  .bc { color:var(--base);  font-weight:700; }   /* BASE CASE */
+  .legend { display:flex; gap:1.6rem; margin-top:1.6rem; font-family:"Segoe UI", sans-serif; font-size:1rem; }
+  .legend span { padding:.3rem .8rem; border-radius:8px; color:#fff; }
+  pre { background:#20242e; color:#e8ecf1; border-radius:10px; padding:1rem 1.3rem; font-family:var(--mono);
+        font-size:.98rem; line-height:1.55; overflow-x:auto; max-width:860px; }
+  pre .cst { color:#a5b4fc; } pre .ctr { color:#fda4af; } pre .cbc { color:#5eead4; } pre .cmt { color:#8b95a7; }
+  ul.clean { list-style:none; font-size:1.15rem; line-height:1.95; max-width:76ch; font-family:"Segoe UI", sans-serif; }
+  ul.clean li::before { content:"✎ "; color:var(--dp); }
+  .nd { color:var(--drop); border-bottom:1px dashed var(--drop); cursor:help; font-family:var(--mono); font-size:.95em; }
+  #tip { position:fixed; z-index:50; max-width:480px; background:#fffdf4; border:1.5px solid var(--drop); border-radius:12px;
+         padding:1rem 1.2rem; font-size:.92rem; line-height:1.5; display:none; box-shadow:0 12px 40px #00000030;
+         font-family:"Segoe UI", sans-serif; }
+  #tip .t-name { color:var(--drop); font-weight:700; font-size:1.05rem; }
+  #tip .t-cat { color:var(--dim); font-size:.78rem; text-transform:uppercase; letter-spacing:.15em; margin-left:.6rem; }
+  #tip .t-row { margin-top:.5rem; color:#3c4048; }
+  #tip .t-row b { color:var(--dp); font-weight:600; }
+  table { border-collapse:collapse; font-size:1.02rem; width:100%; max-width:920px; font-family:"Segoe UI", sans-serif; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:.5rem 1rem .5rem 0; border-bottom:2px solid var(--edge); }
+  td { padding:.55rem 1rem .55rem 0; border-bottom:1px solid #eceadd; }
+  td.num { font-family:var(--mono); color:var(--dp); }
+  /* call-tree */
+  .tree { font-family:var(--mono); font-size:1rem; line-height:1.7; background:var(--panel); border:1px solid var(--edge);
+          border-radius:10px; padding:1rem 1.4rem; display:inline-block; }
+  .dup { background:#fde8e8; color:var(--trans); border-radius:4px; padding:0 .25rem; }
+  /* slider widget */
+  .widget { background:#14161cf2; border:1px solid #2e3442; border-radius:16px; padding:1.3rem 1.6rem; color:#e8ecf1;
+            font-family:"Segoe UI", sans-serif; max-width:900px; box-shadow:0 8px 30px #0004; }
+  .widget .sl-row { display:flex; align-items:center; gap:1rem; margin:.5rem 0; }
+  .widget label { width:120px; color:#9aa4b8; text-align:right; }
+  .widget input[type=range] { flex:1; accent-color:#ffb454; cursor:pointer; }
+  .widget .sl-val { font-family:var(--mono); color:#ffb454; min-width:90px; }
+  .widget .wout { margin-top:1rem; border-top:1px solid #2e3442; padding-top:1rem; font-size:1.05rem; line-height:1.8; }
+  .widget .res { font-family:var(--mono); font-size:1.3rem; }
+  .widget .obar { height:1.1rem; background:#262c38; border-radius:6px; overflow:hidden; margin:.25rem 0 .6rem; }
+  .widget .obar > div { height:100%; border-radius:6px; transition:width .15s; }
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#20242ef5; border-top:2px solid var(--dp); padding:1.1rem 7vw;
+           font-size:1rem; color:#dfe3ea; line-height:1.5; display:none; max-height:38vh; overflow:auto; font-family:"Segoe UI", sans-serif; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#b2ac95; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#b2ac95; font-size:.85rem; font-family:"Segoe UI", sans-serif; }
+  .namedrop { margin-top:1.6rem; font-size:1rem; color:var(--drop); font-family:var(--mono); }
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">Dynamic Programming · Beginners Part 1 of 3</div>
+  <h1>DP is just <span class="tr">recursion</span> that <span class="st">remembers</span>.</h1>
+  <p class="sub">Part 1: the recognition test, the 5-step recipe, and the three canonical 1-D problems (Fibonacci → Climbing Stairs → House Robber). Parts 2–3 will add grids, knapsack, strings, and the advanced zoo.</p>
+  <div class="legend">
+    <span style="background:var(--state)">STATE — what a subproblem means</span>
+    <span style="background:var(--trans)">TRANSITION — how answers combine</span>
+    <span style="background:var(--base)">BASE CASE — where recursion stops</span>
+  </div>
+  <p class="sub" style="margin-top:1rem">These three colors mean the same thing on every slide of this series. Train your eye on them.</p>
+</section>
+<div class="notes">Teaching design: three semantic colors used uniformly (state=indigo, transition=rose, base=teal) so pattern recognition transfers across problems. The series plan: Part 1 = 1-D DP + the method; Part 2 = 2-D (grids, knapsack, LCS/edit distance); Part 3 = advanced (intervals, bitmask, trees, digit DP).</div>
+
+<!-- 2 WHAT DP IS -->
+<section class="slide">
+  <div class="kicker">What It Actually Is</div>
+  <h2>Two properties make DP work — and they're your recognition test.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3 class="tr">Overlapping subproblems</h3>
+      <p>The naive recursion solves the <em>same</em> smaller problem over and over. In fib(5)'s call tree, fib(3) appears twice, fib(2) three times — and it explodes exponentially.</p>
+      <div class="tree">fib(5)<br>├─ fib(4)<br>│&nbsp;&nbsp;├─ <span class="dup">fib(3)</span><br>│&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="dup">fib(2)</span><br>│&nbsp;&nbsp;│&nbsp;&nbsp;└─ fib(1)<br>│&nbsp;&nbsp;└─ <span class="dup">fib(2)</span><br>└─ <span class="dup">fib(3)</span>&nbsp;&nbsp;← same work, again!<br>&nbsp;&nbsp;&nbsp;├─ <span class="dup">fib(2)</span><br>&nbsp;&nbsp;&nbsp;└─ fib(1)</div>
+    </div>
+    <div class="col card">
+      <h3 class="st">Optimal substructure</h3>
+      <p>The best answer to the big problem is <em>assembled from best answers to smaller ones</em>. Best way to climb 10 stairs = best way to climb 8 or 9, plus one move. No "global cleverness" needed — small optima compose.</p>
+      <p style="margin-top:.8rem"><span class="nd" data-key="optimal-substructure">Both present → DP.</span> Overlap missing → plain divide &amp; conquer (mergesort). A provably safe local choice → greedy is cheaper.</p>
+    </div>
+  </div>
+</section>
+<div class="notes">The recognition test is the first instinct to install: before writing anything, ask "does brute force re-solve identical subproblems?" (overlap) and "can I build the big answer from small answers?" (substructure). Saying this check out loud at the whiteboard IS structured problem solving — interviewers score it. Counter-example to have ready: longest SIMPLE path in a graph has overlap but NO optimal substructure (sub-paths constrain each other) — DP fails there.</div>
+
+<!-- 3 THE RECIPE -->
+<section class="slide">
+  <div class="kicker">The Instinct — Memorize This Recipe</div>
+  <h2>Five questions solve every DP problem in this series.</h2>
+  <table>
+    <tr><th></th><th>Question</th><th>For Climbing Stairs…</th></tr>
+    <tr><td class="num">1</td><td><b class="st">STATE</b> — "dp[i] = ___" <em>in plain English</em></td><td><span class="st">dp[i] = number of ways to reach step i</span></td></tr>
+    <tr><td class="num">2</td><td><b class="tr">TRANSITION</b> — how do smaller states combine?</td><td><span class="tr">dp[i] = dp[i−1] + dp[i−2]</span> (last move was 1 or 2)</td></tr>
+    <tr><td class="num">3</td><td><b class="bc">BASE CASES</b> — smallest states answered directly</td><td><span class="bc">dp[0] = 1, dp[1] = 1</span></td></tr>
+    <tr><td class="num">4</td><td><b>ORDER</b> — compute so dependencies come first (or memoize)</td><td>i = 2, 3, …, n</td></tr>
+    <tr><td class="num">5</td><td><b>ANSWER + COST</b> — where is it? complexity?</td><td>dp[n] · <span class="nd" data-key="dp-complexity">states × transition</span> = n × O(1) = O(n)</td></tr>
+  </table>
+  <p class="sub">This is <span class="nd" data-key="srtbot">SRTBOT</span> (MIT 6.006, Erik Demaine) with friendlier words. Step 1 is where DP problems are won or lost: <b>if you can't say the state in one English sentence, stop and rethink.</b></p>
+</section>
+<div class="notes">Drill ritual: for EVERY problem in this deck (and your own practice), write the five answers before any code. The English-sentence test for state is the single highest-leverage habit: "dp[i] = the number of ways to…", "dp[i] = the max money using houses 0..i". Vague state → wrong recurrence → unfixable code. Demaine's SRTBOT lectures (MIT OCW 6.006, free on YouTube) are the gold-standard deep version of this slide.</div>
+
+<!-- 4 FIB WORKED -->
+<section class="slide">
+  <div class="kicker">Worked Example 1 · Fibonacci</div>
+  <h2>One problem, four speeds — the whole DP story in 14 lines.</h2>
+  <pre><span class="cmt"># ① naive recursion — O(2ⁿ): re-solves overlapping subproblems</span>
+def fib(n): return n if n &lt; 2 else fib(n-1) + fib(n-2)
+
+<span class="cmt"># ② memoization (top-down) — O(n): the SAME recursion, plus a cache</span>
+from functools import cache
+@cache                                  <span class="cmt"># dict keyed by n, filled lazily</span>
+def fib(n): return <span class="cbc">n if n &lt; 2</span> else <span class="ctr">fib(n-1) + fib(n-2)</span>
+
+<span class="cmt"># ③ tabulation (bottom-up) — O(n) time, O(n) space: fill the table in order</span>
+def fib(n):
+    dp = [0]*(n+1); <span class="cbc">dp[1] = 1</span>          <span class="cmt"># base cases</span>
+    for i in range(2, n+1): <span class="ctr">dp[i] = dp[i-1] + dp[i-2]</span>
+    return dp[n]                        <span class="cmt"># answer lives at dp[n]</span>
+
+<span class="cmt"># ④ space-optimized — O(n) time, O(1) space: only 2 states ever matter</span>
+def fib(n):
+    <span class="cbc">a, b = 0, 1</span>
+    for _ in range(n): <span class="ctr">a, b = b, a + b</span>
+    return a</pre>
+  <p class="sub">The interview arc is always ①→②→③→④: show you see the overlap, cache it, invert it, then shrink it. <span class="nd" data-key="memoization">Memo vs tabulation</span> trade-off: memo is easier to derive; tabulation dodges Python's ~1000-frame recursion limit and unlocks ④.</p>
+</section>
+<div class="notes">Color mapping in the code: teal = base cases, rose = the transition — same semantics as the slides. Talking points per step: ① "T(n) = T(n−1)+T(n−2)+O(1) → exponential, ~φⁿ". ② @cache makes each n computed once → O(n) time, O(n) space (cache + recursion stack!). ③ same table, explicit order, no stack. ④ the dependency window is only {i−1, i−2}, so keep two variables — the space-optimization instinct that generalizes to 'keep one row' in 2-D problems (Part 2).</div>
+
+<!-- 5 WIDGET -->
+<section class="slide">
+  <div class="kicker">🎛 Interactive · Feel the Explosion</div>
+  <h2>Slide n. Watch why caching isn't optional.</h2>
+  <div class="widget" id="fibw">
+    <div class="sl-row"><label>n</label><input type="range" id="fibn" min="1" max="35" step="1" value="10"><span class="sl-val" id="fibnv"></span></div>
+    <div class="wout" id="fibout"></div>
+  </div>
+  <p class="sub">Naive calls ≈ 2·fib(n+1)−1 (exponential, ~1.618ⁿ). Memoized: each state computed exactly once. At n=35 that's the difference between ~30 million calls and 35.</p>
+</section>
+<div class="notes">Demo script: n=10 (354 calls vs 10 — noticeable), n=25 (~243k vs 25 — absurd), n=35 (~30M vs 35 — the bar chart gives up). The verbal takeaway: "the state space was always tiny (n states); the naive recursion just refused to notice." That reframe — count the DISTINCT states, not the calls — is the complexity instinct.</div>
+
+<!-- 6 CLIMBING STAIRS -->
+<section class="slide">
+  <div class="kicker">Worked Example 2 · Climbing Stairs (LeetCode 70)</div>
+  <h2>"You can climb 1 or 2 steps. How many ways to reach step n?"</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3>Run the recipe</h3>
+      <p><b class="st">1 · State:</b> <span class="st">dp[i] = # ways to stand on step i</span><br>
+      <b class="tr">2 · Transition:</b> the <em>last move</em> was +1 or +2, so <span class="tr">dp[i] = dp[i−1] + dp[i−2]</span><br>
+      <b class="bc">3 · Base:</b> <span class="bc">dp[0]=1 (one way: do nothing), dp[1]=1</span><br>
+      <b>4 · Order:</b> left to right &nbsp; <b>5 ·</b> answer dp[n], O(n)/O(1)</p>
+    </div>
+    <div class="col card">
+      <h3>The transferable instinct</h3>
+      <p>The transition came from asking: <b>"what was the LAST decision?"</b> Condition on it, and the rest of the problem is a smaller copy of itself. This one question generates the recurrence for most beginner DP — it's literally Fibonacci wearing a costume, and noticing that out loud is interview gold.</p>
+    </div>
+  </div>
+</section>
+<div class="notes">"Condition on the last decision" is instinct #2 (after the English-sentence state test). Variants to mention if probed: steps of 1..k → dp[i] = Σ dp[i−j] for j=1..k (O(nk), or O(n) with a sliding window sum); min COST climbing stairs (LC 746) → same state, min() instead of +, which previews House Robber's max().</div>
+
+<!-- 7 HOUSE ROBBER -->
+<section class="slide">
+  <div class="kicker">Worked Example 3 · House Robber (LeetCode 198)</div>
+  <h2>"Rob houses for max money — but never two adjacent ones."</h2>
+  <pre><span class="cmt"># 1 STATE: dp[i] = max money obtainable from houses 0..i</span>
+<span class="cmt"># 2 TRANSITION: last decision = rob house i, or don't:</span>
+<span class="cmt">#      rob it   -> nums[i] + dp[i-2]   (forced to skip neighbor)</span>
+<span class="cmt">#      skip it  -> dp[i-1]</span>
+<span class="cmt"># 3 BASE: dp[0] = nums[0]</span>
+def rob(nums):
+    <span class="cbc">prev2, prev1 = 0, 0</span>                  <span class="cmt"># dp[-2], dp[-1] ≡ 0  (space-optimized day one)</span>
+    for x in nums:
+        <span class="ctr">prev2, prev1 = prev1, max(prev1, prev2 + x)</span>   <span class="cmt"># max(skip, rob)</span>
+    return prev1                          <span class="cmt"># 5: answer; O(n) time, O(1) space</span></pre>
+  <p class="sub">New ingredient vs stairs: the transition is now a <b class="tr">max over choices</b> instead of a sum over ways. That's the whole difference between <em>counting</em> DP and <em>optimization</em> DP — same recipe, different combiner.</p>
+</section>
+<div class="notes">This is the "20-30 lines of clean code" league for Track A — rob() is 5 lines and interview-complete. The counting-vs-optimizing taxonomy: combiner + (count ways), min/max (best value), OR (reachability — e.g., Jump Game). Same 5-step recipe each time; only step 2's operator changes. Follow-up they love: House Robber II (circular street) → run the line version twice: houses[0..n−2] and houses[1..n−1], take the max — reduces the new problem to the solved one.</div>
+
+<!-- 8 TOP-DOWN VS BOTTOM-UP -->
+<section class="slide">
+  <div class="kicker">Two Dialects, One Language</div>
+  <h2>Derive top-down. Ship bottom-up. Know why.</h2>
+  <table>
+    <tr><th></th><th>Memoization (top-down)</th><th>Tabulation (bottom-up)</th></tr>
+    <tr><td>How it feels</td><td>write the recursion, add <span class="num">@cache</span></td><td>fill a table from <span class="bc">base cases</span> up</td></tr>
+    <tr><td>Deriving it</td><td class="num">easier — it IS the recurrence</td><td>must figure out iteration order</td></tr>
+    <tr><td>States computed</td><td>only the ones actually needed</td><td>all of them</td></tr>
+    <tr><td>Recursion limit</td><td class="num">Python dies ~1000 deep ⚠</td><td>immune (it's a loop)</td></tr>
+    <tr><td>Space optimization</td><td>hard (cache keeps everything)</td><td class="num">easy — keep last row / 2 vars</td></tr>
+    <tr><td>Interview strategy</td><td colspan="2"><b>derive top-down out loud → convert to bottom-up → optimize space if asked</b></td></tr>
+  </table>
+</section>
+<div class="notes">The conversion procedure (worth rehearsing once): memoized fn's argument(s) become table indices; base cases seed the table; the recursive calls become table reads; order = ensure reads happen before writes (for 1-D "i depends on i−1, i−2", that's just left-to-right). Python-specific trap: sys.setrecursionlimit exists but a real interview answer is "I'd tabulate to avoid stack depth entirely."</div>
+
+<!-- 9 RECOGNITION -->
+<section class="slide">
+  <div class="kicker">Spotting DP in the Wild</div>
+  <h2>The phrases that should make your DP sense tingle.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3 class="st">Strong signals</h3>
+      <p>▸ "how <b>many ways</b>…" (counting)<br>
+         ▸ "<b>minimum/maximum</b> cost/profit/path…" (optimizing)<br>
+         ▸ "<b>can you</b> reach/partition/form…" (reachability)<br>
+         ▸ decisions in <b>sequence</b>, each constraining the next<br>
+         ▸ brute force is exponential, but n ≤ a few thousand</p>
+    </div>
+    <div class="col card">
+      <h3 class="tr">Anti-signals</h3>
+      <p>▸ a sort + one pass solves it → <b>greedy</b> (intervals, meetings)<br>
+         ▸ subproblems don't repeat → <b>divide &amp; conquer</b><br>
+         ▸ need actual paths in a graph with cycles → <b>BFS/Dijkstra</b><br>
+         ▸ n ≤ 20 and weird constraints → maybe <b>brute force/bitmask</b> is fine</p>
+    </div>
+  </div>
+  <p class="sub">The honest tiebreaker: try to state <span class="st">dp[i] in one English sentence</span>. If a sentence exists, DP probably works. If every sentence you try leaks information ("…but it depends which houses I already robbed"), your <b class="st">state is missing a dimension</b> — the #1 beginner bug.</p>
+</section>
+<div class="notes">The "state missing a dimension" bug deserves emphasis: when the recurrence seems impossible, the fix is almost always to ADD to the state (e.g., dp[i][holding] for stock problems — a Part 2 preview). Also name the complexity sanity check: if your state space is 10^9, DP won't run — constraints hint at the intended state (n ≤ 1000 suggests O(n²) states are fine).</div>
+
+<!-- 10 BUGS -->
+<section class="slide">
+  <div class="kicker">The Beginner Bug List</div>
+  <ul class="clean">
+    <li><b class="bc">Base case off-by-one</b> — test dp on the tiniest inputs BY HAND (n=0, 1, 2) before trusting the loop</li>
+    <li><b>Iteration order violates dependencies</b> — reading dp[i−1] before it's written; in Part 2 this becomes the row/column ordering bug</li>
+    <li><b class="st">State undersized</b> — the English sentence "leaks" (see previous slide); add a dimension</li>
+    <li><b class="tr">Transition misses a choice</b> — enumerate the last decision's options exhaustively, then combine</li>
+    <li><b>Answer in the wrong cell</b> — is it dp[n], dp[n−1], or max(dp)? Say it in step 5, not after the bug</li>
+    <li><b>Python recursion limit</b> — memoized solutions die ~1000 deep; tabulate</li>
+  </ul>
+  <p class="sub">Testing ritual for Track A: trace your table on a 3-element input out loud. It catches four of these six bugs and scores communication points while doing it.</p>
+</section>
+<div class="notes">This slide doubles as the self-review checklist after writing any DP solution in a mock. The "trace a tiny input out loud" ritual maps directly to Google's expectation that candidates test their own code without prompting — it's the same discipline as the sparse-vector trace from the live interview round.</div>
+
+<!-- 11 RESOURCES -->
+<section class="slide">
+  <div class="kicker">Where To Deepen the Intuition</div>
+  <h2>Four resources, in the order a beginner should use them.</h2>
+  <table>
+    <tr><th>Resource</th><th>What it's best at</th><th>Find it</th></tr>
+    <tr><td><b>Alvin Zablan's 5-hour DP course</b> (freeCodeCamp)</td><td>THE intuition builder — call trees drawn live, memo→tab for every problem</td><td class="num">YouTube: "Dynamic Programming freeCodeCamp"</td></tr>
+    <tr><td><b>Erik Demaine, MIT 6.006</b> (lectures 15–18)</td><td>the rigorous frame — <span class="nd" data-key="srtbot">SRTBOT</span>, why DP works, proofs</td><td class="num">ocw.mit.edu · YouTube MIT OCW</td></tr>
+    <tr><td><b>NeetCode DP playlists + roadmap</b></td><td>interview-calibrated problem sequence, pattern by pattern</td><td class="num">neetcode.io → DP section</td></tr>
+    <tr><td><b>cp-algorithms.com</b> (DP articles)</td><td>the reference once basics click; Part 3 territory</td><td class="num">cp-algorithms.com</td></tr>
+  </table>
+  <p class="sub">Suggested path for your timeline: this deck → 10 problems from NeetCode's 1-D DP list using the 5-step recipe in writing each time → Zablan's course on 1.5× for anything that didn't click.</p>
+</section>
+<div class="notes">Why these four: Zablan's course is the most-recommended intuition resource on every learning forum for a reason — he draws the recursion tree for EVERY problem before coding. Demaine supplies the "why it works" rigor Google interviewers themselves were trained on. NeetCode sequences problems by pattern (crucial — random LeetCode order teaches nothing). CP-algorithms is deliberately last: dense, but the right reference by Part 3.</div>
+
+<!-- 12 CLOSE -->
+<section class="slide">
+  <div class="kicker">The One-Breath Answer</div>
+  <h1 style="font-size:1.95rem">"DP applies when a problem has <span class="tr">overlapping subproblems</span> and <span class="st">optimal substructure</span>; I define the <span class="st">state in one English sentence</span>, derive the <span class="tr">transition by conditioning on the last decision</span>, pin the <span class="bc">base cases</span>, pick an order or memoize, and read the complexity as <b>states × work-per-transition</b> — then convert top-down to bottom-up and shrink the table to the dependency window."</h1>
+  <p class="sub">Part 2 next: the state gains a second dimension — grids, knapsack, longest common subsequence — same recipe, bigger tables.</p>
+</section>
+<div class="notes">Rehearse the breath, then re-derive stairs and robber from scratch tomorrow WITHOUT the deck (retrieval practice beats re-reading). The two instincts to carry out of Part 1: (1) state must survive the one-English-sentence test, (2) transitions come from conditioning on the last decision. Everything in Parts 2–3 is those two instincts with more indices.</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">← → navigate · N notes · F fullscreen · hover amber = cards · slide the slider</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+let i=0;
+function show(n){ i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')show(i+1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+  else if(e.key.toLowerCase()==='n')document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.();
+});
+show(0);
+
+/* name-drop tooltips */
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div>
+      <div class="t-row"><b>Why it matters:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect();
+    let x=r.left, y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20) x=innerWidth-tw-20;
+    if(y+th>innerHeight-20) y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+
+/* fib explosion widget */
+(function(){
+  const slider=document.getElementById('fibn'), out=document.getElementById('fibout'), nv=document.getElementById('fibnv');
+  function fib(n){ let a=0n,b=1n; for(let k=0;k<n;k++){[a,b]=[b,a+b];} return a; }
+  function upd(){
+    const n=parseInt(slider.value);
+    nv.textContent='n = '+n;
+    const naive = 2n*fib(n+1)-1n;                 // calls in the naive recursion tree
+    const memo  = BigInt(n<2?1:n+1);              // distinct states computed once
+    const ratio = Number(naive)/Number(memo);
+    const frac  = Math.min(1, Math.log10(Number(naive))/7.5);  // log bar vs 10^7.5 cap
+    out.innerHTML =
+      `naive recursion: <span class="res" style="color:#ff6b6b">${Number(naive).toLocaleString()}</span> calls`+
+      `<div class="obar"><div style="width:${frac*100}%;background:#ff6b6b"></div></div>`+
+      `memoized: <span class="res" style="color:#76b900">${memo}</span> computations (one per state)`+
+      `<div class="obar"><div style="width:${Math.min(100,Number(memo)/3)}%;background:#76b900"></div></div>`+
+      `<span style="color:#9aa4b8">that's <b style="color:#ffb454">${ratio>=1000?ratio.toExponential(1):Math.round(ratio)}×</b> wasted work — the state space was always just n+1 entries; the naive version simply refused to notice (red bar is log-scaled, or it would leave the building)</span>`;
+  }
+  slider.addEventListener('input',upd);
+  document.getElementById('fibw').addEventListener('click',e=>e.stopPropagation());
+  upd();
+})();
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

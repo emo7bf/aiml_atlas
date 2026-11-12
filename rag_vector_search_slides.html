@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RAG &amp; Vector Search: Retrieval for Generators</title>
+<style>
+  :root {
+    /* Identity: deep night-navy + lavender */
+    --bg: #11101e; --panel: #1b1930; --edge: #322e52;
+    --ink: #f0eef8; --dim: #9d97bd;
+    --rg: #a78bfa;              /* topic accent: lavender */
+    --gpu: #76b900;             /* shared: compute/GPU = green */
+    --host: #4da3ff;            /* shared: CPU/host/comm = blue */
+    --drop: #ffb454;            /* shared: name-drops = amber */
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); font-family:Verdana, "Segoe UI", sans-serif; overflow:hidden;
+         background-image: radial-gradient(rgba(167,139,250,.08) 1px, transparent 1.5px);
+         background-size: 3.5vmin 3.5vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:6vh 7vw; flex-direction:column; justify-content:center; }
+  .slide.active { display:flex; }
+  .kicker { color:var(--rg); font-size:.95rem; letter-spacing:.3em; text-transform:uppercase; margin-bottom:1.3rem; font-weight:700; }
+  h1 { font-size:2.9rem; line-height:1.2; max-width:32ch; font-weight:700; }
+  h2 { font-size:2.1rem; line-height:1.3; margin-bottom:1.8rem; max-width:40ch; font-weight:700; }
+  .sub { color:var(--dim); font-size:1.18rem; margin-top:1.3rem; max-width:66ch; line-height:1.55; }
+  .big { font-family:var(--mono); font-size:3.2rem; font-weight:700; color:var(--rg); line-height:1.25; }
+  .biglabel { font-size:1.3rem; color:var(--dim); margin-top:1rem; max-width:62ch; }
+  .cols { display:flex; gap:1.8rem; align-items:stretch; }
+  .col { flex:1; }
+  .card { background:var(--panel); border-radius:14px; padding:1.4rem 1.6rem; border:1px solid var(--edge); }
+  .card h3 { font-size:1.12rem; margin-bottom:.55rem; color:var(--rg); }
+  .card p { color:var(--dim); font-size:.98rem; line-height:1.5; }
+  .rg { color:var(--rg); } .gpu { color:var(--gpu); } .host { color:var(--host); }
+  ul.clean { list-style:none; font-size:1.16rem; line-height:1.95; max-width:76ch; }
+  ul.clean li::before { content:"▸ "; color:var(--rg); }
+  .nd { color:var(--drop); border-bottom:1px dashed var(--drop); cursor:help; font-family:var(--mono); font-size:.95em; }
+  #tip { position:fixed; z-index:50; max-width:470px; background:#0a0914; border:1px solid var(--drop);
+         border-radius:12px; padding:1rem 1.2rem; font-size:.92rem; line-height:1.5; display:none; box-shadow:0 12px 40px #000c; }
+  #tip .t-name { color:var(--drop); font-weight:700; font-size:1.05rem; }
+  #tip .t-cat { color:var(--dim); font-size:.78rem; text-transform:uppercase; letter-spacing:.15em; margin-left:.6rem; }
+  #tip .t-row { margin-top:.5rem; color:#e0dcf0; }
+  #tip .t-row b { color:var(--rg); font-weight:600; }
+  table { border-collapse:collapse; font-size:1.02rem; width:100%; max-width:980px; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:.5rem 1rem .5rem 0; border-bottom:2px solid var(--edge); }
+  td { padding:.55rem 1rem .55rem 0; border-bottom:1px solid #262243; }
+  td.num { font-family:var(--mono); color:var(--rg); }
+  /* spectrum diagram */
+  .spectrum { display:flex; gap:.6rem; align-items:stretch; margin-top:.6rem; max-width:980px; }
+  .spec { flex:1; border-radius:10px; padding:.9rem 1rem; border:1px solid var(--edge); background:var(--panel); }
+  .spec b { display:block; font-size:1rem; color:var(--rg); margin-bottom:.3rem; }
+  .spec span { color:var(--dim); font-size:.85rem; line-height:1.4; display:block; }
+  .spec .cost { font-family:var(--mono); color:var(--drop); font-size:.8rem; margin-top:.5rem; display:block; }
+  .specarrow { display:flex; align-items:center; color:var(--dim); font-size:1.4rem; }
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#080712f2; border-top:2px solid var(--rg);
+           padding:1.1rem 7vw; font-size:1rem; color:#cfc9e4; line-height:1.5; display:none; max-height:38vh; overflow:auto; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#453f6b; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#453f6b; font-size:.85rem; }
+  .namedrop { margin-top:1.8rem; font-size:1rem; color:var(--drop); font-family:var(--mono); }
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">RAG &amp; Vector Search · Interview Edition</div>
+  <h1>Retrieval for generators:<br>the <span class="rg">RecSys funnel</span>, aimed at an LLM.</h1>
+  <p class="sub">Same shape you already know — cheap recall, then expensive precision — with new players: <span class="nd" data-key="hybrid-search">hybrid search</span>, <span class="nd" data-key="hnsw">HNSW</span> &amp; <span class="nd" data-key="scann">ScaNN</span> internals, the <span class="nd" data-key="colbert">ColBERT</span>-to-<span class="nd" data-key="cross-encoder">cross-encoder</span> spectrum, <span class="nd" data-key="chunking">chunking</span>, and <span class="nd" data-key="self-rag">agentic RAG</span>.</p>
+  <div class="namedrop">→ advance · N speaker notes · hover amber terms for name-drop cards</div>
+</section>
+<div class="notes">Open any RAG design answer by mapping it onto the retrieval funnel from the RecSys deck: corpus → retrieval (recall) → rerank (precision) → generate. Interviewers reward recognizing it's the same architecture with the ranker's output feeding a context window instead of a feed.</div>
+
+<!-- 2 PIPELINE -->
+<section class="slide">
+  <div class="kicker">The Pipeline</div>
+  <h2>Six stages — and quality is capped by the weakest one.</h2>
+  <div class="spectrum">
+    <div class="spec"><b>1 · Chunk</b><span>split docs; overlap; metadata</span></div>
+    <div class="specarrow">→</div>
+    <div class="spec"><b>2 · Embed</b><span>bi-encoder → vectors</span></div>
+    <div class="specarrow">→</div>
+    <div class="spec"><b>3 · Index</b><span>HNSW / IVF-PQ / ScaNN</span></div>
+    <div class="specarrow">→</div>
+    <div class="spec"><b>4 · Retrieve</b><span>hybrid: dense + BM25, top-100</span></div>
+    <div class="specarrow">→</div>
+    <div class="spec"><b>5 · Rerank</b><span>cross-encoder, top-5</span></div>
+    <div class="specarrow">→</div>
+    <div class="spec"><b>6 · Generate</b><span>LLM + citations</span></div>
+  </div>
+  <p class="sub">Debugging heuristic: trace failures backwards. Bad answer? Check what was retrieved. Bad retrieval? Check how it was chunked. Most "the LLM hallucinated" bugs are stage-1 and stage-4 bugs wearing a costume.</p>
+</section>
+<div class="notes">The "trace backwards" line is a genuinely useful interview differentiator — it shows debugging methodology, not just architecture recall. Also name the eval per stage: retrieval gets recall@k/MRR against a labeled set; generation gets faithfulness/groundedness (does the answer cite the context?) — two different test harnesses.</div>
+
+<!-- 3 HYBRID -->
+<section class="slide">
+  <div class="kicker">Retrieval Stage</div>
+  <h2>Dense finds meaning. Sparse finds the part number.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3>Dense (embeddings + ANN)</h3>
+      <p>Semantic match: synonyms, paraphrase, concepts. Fails embarrassingly on exact identifiers — SKUs, error codes, proper nouns, version numbers — which get squashed in embedding space.</p>
+    </div>
+    <div class="col card">
+      <h3>Sparse (BM25 / TF-IDF)</h3>
+      <p>Exact lexical match in an inverted index. Bulletproof on rare terms; blind to meaning ("car" ≠ "automobile").</p>
+    </div>
+    <div class="col card">
+      <h3><span class="nd" data-key="hybrid-search">Hybrid + RRF</span></h3>
+      <p>Run both, fuse with <b>Reciprocal Rank Fusion</b>: score = Σ 1/(k + rank). Rank-based, so no score-scale calibration needed. The production default.</p>
+    </div>
+  </div>
+</section>
+<div class="notes">The example to deploy: query "ERR_QUIC_PROTOCOL_ERROR site:docs" — dense embedding of that string is mush; BM25 nails it. Conversely "my connection keeps dropping on video calls" needs dense. RRF detail: k≈60 conventionally; being rank-based it gracefully fuses incomparable score distributions. Learned-sparse middle ground: SPLADE (neural term weighting in an inverted index).</div>
+
+<!-- 4 INDEXES -->
+<section class="slide">
+  <div class="kicker">Index Internals</div>
+  <h2>Graph, clusters, or quantization-first: know one sentence about each.</h2>
+  <table>
+    <tr><th>Index</th><th>Mechanism</th><th>Trade-off</th></tr>
+    <tr><td class="num"><span class="nd" data-key="hnsw">HNSW</span></td><td>multi-layer proximity graph; greedy descent from sparse top to dense base (skip-list logic)</td><td>best recall/latency, no training; RAM-hungry, awkward deletes</td></tr>
+    <tr><td class="num">IVF-PQ</td><td>cluster space (coarse), product-quantize residuals to bytes</td><td>tiny memory; lossy, needs training pass</td></tr>
+    <tr><td class="num"><span class="nd" data-key="scann">ScaNN</span></td><td>partitions + <span class="nd" data-key="anisotropic">anisotropic quantization</span> + SIMD scoring</td><td>the Google answer; ranking-aware compression</td></tr>
+    <tr><td class="num">DiskANN</td><td>SSD-resident graph</td><td>billion-scale on one box; latency in ms not µs</td></tr>
+  </table>
+  <p class="sub">The <span class="nd" data-key="anisotropic">anisotropic</span> insight in one line: standard PQ minimizes reconstruction error; retrieval only cares about errors that <b>flip rankings</b> — so penalize the direction that does.</p>
+</section>
+<div class="notes">Which to pick: HNSW for <100M vectors and RAM to burn (every vector DB's default); IVF-PQ/ScaNN when memory dominates cost; DiskANN at billion-scale on a budget. And the recurring judgment check from the RecSys deck: under ~1M vectors, brute force on GPU and skip the index entirely.</div>
+
+<!-- 5 SPECTRUM -->
+<section class="slide">
+  <div class="kicker">The Relevance-Model Spectrum</div>
+  <h2>One axis: how late do query and document interact?</h2>
+  <div class="spectrum">
+    <div class="spec"><b>Bi-encoder</b><span>one vector each; dot product. Indexable, fastest, coarsest.</span><span class="cost">µs · retrieval stage</span></div>
+    <div class="specarrow">→</div>
+    <div class="spec"><b><span class="nd" data-key="colbert">ColBERT</span> (late interaction)</b><span>vector per TOKEN; MaxSim: each query token takes its best doc-token match. Precomputable AND fine-grained.</span><span class="cost">ms · ~100× storage</span></div>
+    <div class="specarrow">→</div>
+    <div class="spec"><b><span class="nd" data-key="cross-encoder">Cross-encoder</span></b><span>query+doc jointly through full attention. Catches negation &amp; nuance; nothing precomputable.</span><span class="cost">10s of ms × N docs · rerank only</span></div>
+  </div>
+  <p class="sub">Earlier interaction = more accuracy = less precomputation. The funnel assigns each model where its cost is affordable: bi-encoder on 10⁸, ColBERT on 10⁴, cross-encoder on 10².</p>
+</section>
+<div class="notes">"Late interaction" decoded: bi-encoders interact at the very end (one dot product), cross-encoders from layer 1 (full attention), ColBERT in between — token embeddings precomputed independently, interaction deferred to a cheap MaxSim at query time. Why cross-encoders win on nuance: a single vector can't represent "covers X but NOT Y" — negation needs cross-attention. This spectrum slide answers the "why not just use the best model everywhere?" follow-up: cost-per-item × items, the funnel argument again.</div>
+
+<!-- 6 CHUNKING -->
+<section class="slide">
+  <div class="kicker">The Unglamorous 80%</div>
+  <h2>Chunking is where RAG quality is actually decided.</h2>
+  <ul class="clean">
+    <li><b>Strategies:</b> fixed-size + overlap (baseline) → recursive-character (respect structure) → semantic/layout-aware (headings, tables) — <span class="nd" data-key="chunking">pick by document type</span></li>
+    <li><b>Embed small, return big:</b> parent-document retrieval — match on focused chunks, hand the LLM the surrounding section</li>
+    <li><b>Metadata filters:</b> date, source, access level — pre-filter before ANN, don't post-filter after</li>
+    <li><b>Staleness:</b> source doc changes → its chunks must be re-embedded and old vectors invalidated — the RAG twin of the ANN freshness problem from the RecSys deck</li>
+  </ul>
+</section>
+<div class="notes">Garbage-in-garbage-out is the slide's thesis: a perfect LLM reading a chunk that splits a table from its header will hallucinate confidently. Chunk-size intuition: too small = context-free fragments, too big = diluted embeddings (one vector averaging many topics). 300–800 tokens with 10-20% overlap is the boring-but-right starting answer; layout-aware for PDFs/tables. Version skew callback: embedding-model upgrades require re-embedding the whole corpus — same atomic-swap discipline as the two-tower index.</div>
+
+<!-- 7 AGENTIC -->
+<section class="slide">
+  <div class="kicker">When Retrieval Fails Anyway</div>
+  <h2>Grade the context. Correct the query. Critique the answer.</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3><span class="nd" data-key="self-rag">Self-RAG / CRAG</span></h3>
+      <p>An evaluator grades retrieved chunks: <b>relevant → generate · ambiguous → augment (web search) · wrong → re-retrieve</b>. Then the output is critiqued against sources before returning. Retrieval becomes a loop, not a lookup.</p>
+    </div>
+    <div class="col card">
+      <h3>Query-side fixes</h3>
+      <p>Query rewriting (decompose multi-hop questions), HyDE (embed a hypothetical answer instead of the question), multi-query expansion. Cheap to mention, often the biggest practical win.</p>
+    </div>
+  </div>
+  <p class="sub">System-design framing: these are <b>fault-tolerance patterns</b> — retries, validation, fallbacks — applied to retrieval. Google interviewers hear "graceful degradation" and smile.</p>
+</section>
+<div class="notes">Trade-off to volunteer: every agentic hop adds an LLM call → latency and cost multiply; production systems gate the loop (only re-retrieve when the evaluator's confidence is low) — the same p99-protection instinct as the serving deck. GraphRAG is the index-side alternative: extract entities/relations at ingest so multi-hop questions become graph walks instead of iterative retrieval.</div>
+
+<!-- 8 NUMBERS -->
+<section class="slide">
+  <div class="kicker">Back-of-the-Envelope Kit</div>
+  <h2>RAG numbers to recite.</h2>
+  <table>
+    <tr><th>Quantity</th><th>Value</th><th>Why it matters</th></tr>
+    <tr><td>Chunk size starting point</td><td class="num">300–800 tok, 10–20% overlap</td><td>the boring-but-right default</td></tr>
+    <tr><td>Funnel stages</td><td class="num">10⁸ → 10² (retrieve) → 5 (rerank)</td><td>bi-encoder → cross-encoder handoff</td></tr>
+    <tr><td>ColBERT storage premium</td><td class="num">~100× single-vector</td><td>a vector per token — the price of late interaction</td></tr>
+    <tr><td>Brute-force threshold</td><td class="num">~1M vectors</td><td>below this, skip the ANN index</td></tr>
+    <tr><td>RRF constant</td><td class="num">k ≈ 60</td><td>rank-based fusion, no calibration</td></tr>
+    <tr><td>Retrieval eval / generation eval</td><td class="num">recall@k, MRR / faithfulness</td><td>two harnesses, never conflate</td></tr>
+  </table>
+</section>
+<div class="notes">Worked design to rehearse: "RAG over 10M internal docs." Chunk layout-aware → ~50M chunks → embed (pick model by MTEB + latency) → HNSW w/ metadata filters → hybrid BM25+dense, RRF → cross-encoder rerank top-100→5 → generate w/ citations → evals: labeled recall@k set + faithfulness scoring → staleness: re-embed on doc update, atomic index swap. Sixty seconds, touches every slide.</div>
+
+<!-- 9 CLOSE -->
+<section class="slide">
+  <div class="kicker">The One-Breath Answer</div>
+  <h1 style="font-size:1.95rem">"RAG is the retrieval funnel feeding a generator: layout-aware chunks embedded into a hybrid index — dense ANN like HNSW or ScaNN fused with BM25 via RRF — reranked by a cross-encoder down to a handful of chunks, with agentic grading and query rewriting as the fault-tolerance layer, and quality owned mostly by the unglamorous stages: chunking, freshness, and stage-separated evals."</h1>
+  <p class="sub">Expand on demand: <span class="nd" data-key="hybrid-search">hybrid/RRF</span> · <span class="nd" data-key="hnsw">HNSW</span> · <span class="nd" data-key="scann">ScaNN</span> · <span class="nd" data-key="colbert">ColBERT</span> · <span class="nd" data-key="cross-encoder">rerankers</span> · <span class="nd" data-key="chunking">chunking</span> · <span class="nd" data-key="self-rag">Self-RAG/CRAG</span></p>
+</section>
+<div class="notes">Sibling-deck links: funnel economics (RecSys deck), ANN internals + freshness (RecSys deck slides 5-6), serving the pipeline (Ray Serve, inference deck), prefix caching for repeated RAG system prompts (RadixAttention, inference deck). The ecosystem is now one connected graph — rehearse jumping between decks mid-answer.</div>
+
+
+<!-- INTERACTIVE (v2) -->
+<section class="slide">
+  <div class="kicker">🎛 Interactive · Rerank Budget</div>
+  <h2>The funnel argument as a latency slider.</h2>
+  <div class="aiml-widget" data-calc="rerank">
+    <div class="sl-row"><label>candidates into reranker</label><input type="range" data-k="N" min="10" max="500" step="10" value="100"><span class="sl-val" data-k="N"></span></div><div class="sl-row"><label>cross-encoder (0.1 ms units)</label><input type="range" data-k="ms" min="5" max="200" step="5" value="30"><span class="sl-val" data-k="ms"></span></div><div class="sl-row"><label>parallel streams</label><input type="range" data-k="par" min="1" max="32" step="1" value="8"><span class="sl-val" data-k="par"></span></div><div class="sl-row"><label>latency budget (ms)</label><input type="range" data-k="budget" min="50" max="1000" step="50" value="200"><span class="sl-val" data-k="budget"></span></div>
+    
+    <div class="wout"></div>
+  </div>
+  <p class="sub">Watch N=500 destroy any budget — then recover it with parallelism, a distilled reranker, or by admitting fewer candidates. Expensive-per-item models only touch few items: the funnel, enforced by arithmetic.</p>
+</section>
+<div class="notes">Pair with the spectrum slide: if the budget won't close, the answer isn't 'no reranker' — it's moving left on the interaction spectrum (ColBERT ≈ 10× cheaper per doc) or shrinking N with a better retriever.</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">← → navigate · N notes · F fullscreen · hover amber = name-drop cards</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+let i=0;
+function show(n){ i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')show(i+1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+  else if(e.key.toLowerCase()==='n')document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.();
+});
+show(0);
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div>
+      <div class="t-row"><b>Why it matters:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect();
+    let x=r.left, y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20) x=innerWidth-tw-20;
+    if(y+th>innerHeight-20) y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

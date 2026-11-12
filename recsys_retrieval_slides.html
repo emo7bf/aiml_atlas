@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Embeddings, Retrieval &amp; RecSys: The Funnel</title>
+<style>
+  :root {
+    /* Identity for this topic: light "design doc paper" */
+    --bg: #faf7f1; --panel: #ffffff; --edge: #e2dccf;
+    --ink: #221f2b; --dim: #6f6880;
+    --rx: #7c3aed;              /* topic accent: violet */
+    --gpu: #5a8f00;             /* shared: compute/GPU = green (darkened for light bg) */
+    --host: #1d6fd1;            /* shared: CPU/host/comm = blue (darkened for light bg) */
+    --drop: #9a6700;            /* shared: name-drops = amber (darkened for light bg) */
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); font-family:"Segoe UI", system-ui, sans-serif; overflow:hidden;
+         background-image: linear-gradient(45deg, rgba(124,58,237,.07) 1px, transparent 1px),
+                           linear-gradient(-45deg, rgba(124,58,237,.07) 1px, transparent 1px);
+         background-size: 5vmin 5vmin; }
+  .slide { display:none; width:100vw; height:100vh; padding:6vh 7vw; flex-direction:column; justify-content:center; }
+  .slide.active { display:flex; }
+  .kicker { color:var(--rx); font-size:1rem; letter-spacing:.3em; text-transform:uppercase; margin-bottom:1.3rem; font-weight:700; }
+  h1 { font-size:3.2rem; line-height:1.15; max-width:30ch; font-weight:800; }
+  h2 { font-size:2.3rem; line-height:1.25; margin-bottom:1.8rem; max-width:36ch; font-weight:800; }
+  .sub { color:var(--dim); font-size:1.22rem; margin-top:1.3rem; max-width:64ch; line-height:1.55; }
+  .big { font-family:var(--mono); font-size:3.4rem; font-weight:700; color:var(--rx); line-height:1.25; }
+  .biglabel { font-size:1.3rem; color:var(--dim); margin-top:1rem; max-width:62ch; }
+  .cols { display:flex; gap:1.8rem; align-items:stretch; }
+  .col { flex:1; }
+  .card { background:var(--panel); border-radius:14px; padding:1.4rem 1.6rem; border:1px solid var(--edge); box-shadow:0 2px 10px #0000000a; }
+  .card h3 { font-size:1.15rem; margin-bottom:.55rem; color:var(--rx); }
+  .card p { color:var(--dim); font-size:1rem; line-height:1.5; }
+  .rx { color:var(--rx); } .gpu { color:var(--gpu); } .host { color:var(--host); }
+  ul.clean { list-style:none; font-size:1.2rem; line-height:1.95; max-width:74ch; }
+  ul.clean li::before { content:"▸ "; color:var(--rx); }
+  .nd { color:var(--drop); border-bottom:1px dashed var(--drop); cursor:help; font-family:var(--mono); font-size:.95em; }
+  #tip { position:fixed; z-index:50; max-width:470px; background:#fffdf8; border:1.5px solid var(--drop);
+         border-radius:12px; padding:1rem 1.2rem; font-size:.92rem; line-height:1.5; display:none; box-shadow:0 12px 40px #00000033; }
+  #tip .t-name { color:var(--drop); font-weight:700; font-size:1.05rem; }
+  #tip .t-cat { color:var(--dim); font-size:.78rem; text-transform:uppercase; letter-spacing:.15em; margin-left:.6rem; }
+  #tip .t-row { margin-top:.5rem; color:#3c3648; }
+  #tip .t-row b { color:var(--rx); font-weight:600; }
+  table { border-collapse:collapse; font-size:1.05rem; width:100%; max-width:960px; }
+  th { text-align:left; color:var(--dim); font-weight:600; padding:.5rem 1rem .5rem 0; border-bottom:2px solid var(--edge); }
+  td { padding:.55rem 1rem .55rem 0; border-bottom:1px solid #ece6d8; }
+  td.num { font-family:var(--mono); color:var(--rx); }
+  /* funnel diagram */
+  .funnel { display:flex; flex-direction:column; align-items:center; gap:.5rem; margin-top:.6rem; }
+  .fstage { border-radius:10px; color:#fff; padding:.8rem 1.4rem; text-align:center; font-size:1.05rem; }
+  .fstage b { font-family:var(--mono); } .fstage span { opacity:.85; font-size:.9rem; display:block; }
+  /* two-tower diagram */
+  .towers { display:flex; gap:3rem; align-items:flex-end; justify-content:center; margin-top:.8rem; }
+  .tower { display:flex; flex-direction:column; gap:.4rem; align-items:center; }
+  .tblock { background:var(--panel); border:1.5px solid var(--rx); border-radius:8px; padding:.55rem 1.3rem; font-size:.95rem; min-width:190px; text-align:center; }
+  .tdot { font-size:1.6rem; color:var(--rx); font-family:var(--mono); align-self:center; padding-bottom:2.2rem; }
+  .tlabel { font-size:.85rem; color:var(--dim); margin-top:.3rem; }
+  .notes { position:fixed; bottom:0; left:0; right:0; background:#2a2335f5; border-top:2px solid var(--rx);
+           padding:1.1rem 7vw; font-size:1rem; color:#e6e0f0; line-height:1.5; display:none; max-height:38vh; overflow:auto; }
+  body.show-notes .notes.active-note { display:block; }
+  .hud { position:fixed; top:1rem; right:1.4rem; color:#b8b0c4; font-family:var(--mono); font-size:.85rem; }
+  .hint { position:fixed; bottom:1rem; left:1.4rem; color:#b8b0c4; font-size:.85rem; }
+  .namedrop { margin-top:1.8rem; font-size:1rem; color:var(--drop); font-family:var(--mono); }
+</style>
+</head>
+<body>
+
+<!-- 1 TITLE -->
+<section class="slide active">
+  <div class="kicker">Embeddings, Retrieval &amp; RecSys</div>
+  <h1>You can't rank a <span class="rx">billion</span> items.<br>So you build a <span class="rx">funnel</span>.</h1>
+  <p class="sub">The architecture behind YouTube, Search suggestions, and Play Store recs: <span class="nd" data-key="two-tower">two-tower</span> embeddings, <span class="nd" data-key="sampled-softmax">sampled softmax</span>, <span class="nd" data-key="ann">ScaNN</span> indexes, and the operational realities (freshness, bias, metrics) that make the answer L5-grade.</p>
+  <div class="namedrop">→ advance · N speaker notes · hover amber terms for name-drop cards</div>
+</section>
+<div class="notes">This deck exists because of real interview feedback: the L5 gaps were (1) two-tower training detail, (2) ANN index maintenance, (3) vectorized implementation reflexes. All three are "operational awareness" gaps, and all three get a slide. Canonical citation to open with: Covington, Adams & Sargin 2016, "Deep Neural Networks for YouTube Recommendations" — THE Google RecSys paper.</div>
+
+<!-- 2 FUNNEL -->
+<section class="slide">
+  <div class="kicker">The Shape of Every RecSys</div>
+  <h2>Cost per item rises; candidates shrink. That's the whole design.</h2>
+  <div class="funnel">
+    <div class="fstage" style="background:#4c1d95; width:88%"><b>Corpus · ~10⁹ items</b><span>embeddings precomputed offline</span></div>
+    <div class="fstage" style="background:#6d28d9; width:66%"><b>Retrieval · ~10³ candidates</b><span>dot product vs ANN index · microseconds/item</span></div>
+    <div class="fstage" style="background:#7c3aed; width:44%"><b>Ranking · ~10² scored</b><span>heavy model, cross features · milliseconds/item</span></div>
+    <div class="fstage" style="background:#8f5cf0; width:24%"><b>Re-rank · ~10 shown</b><span>diversity, freshness, policy, business rules</span></div>
+  </div>
+  <p class="sub">Each stage trades <b>recall</b> (don't lose the good stuff) for <b>precision</b> (order it right) at rising cost. Frame every RecSys answer around this <span class="nd" data-key="funnel">funnel</span> before diving anywhere.</p>
+</section>
+<div class="notes">The one-liner that earns the slide: "retrieval is optimized for recall@k, ranking for precision/NDCG." Also note the latency budget framing: the whole funnel typically runs in ~100–300ms; retrieval gets maybe 10–20ms — which is WHY it must be a dot product against a prebuilt index and not a model forward pass per item.</div>
+
+<!-- 3 TWO-TOWER -->
+<section class="slide">
+  <div class="kicker">Retrieval's Workhorse</div>
+  <h2>Two towers, one dot product — and they never meet until serving.</h2>
+  <div class="towers">
+    <div class="tower">
+      <div class="tblock" style="border-style:dashed">user embedding <b class="rx">u</b></div>
+      <div class="tblock">MLP layers</div>
+      <div class="tblock">user features<br><span class="tlabel">history, context, demographics</span></div>
+      <div class="tlabel"><b class="host">computed per-request</b></div>
+    </div>
+    <div class="tdot">u · v</div>
+    <div class="tower">
+      <div class="tblock" style="border-style:dashed">item embedding <b class="rx">v</b></div>
+      <div class="tblock">MLP layers</div>
+      <div class="tblock">item features<br><span class="tlabel">id, metadata, content signals</span></div>
+      <div class="tlabel"><b class="gpu">precomputed offline → ANN index</b></div>
+    </div>
+  </div>
+  <p class="sub">The decoupling IS the point: relevance must reduce to a dot product so retrieval becomes nearest-neighbor search. The price: no user×item <b>cross features</b> — those wait for the ranking stage.</p>
+</section>
+<div class="notes">Interview trap: "why not use a single network taking (user, item) pairs?" — because then you'd need a forward pass per item per request; the two-tower factorization is what makes O(10⁹)-corpus retrieval possible. The dot-product constraint is a capacity sacrifice made for indexability. Cite Yi et al. 2019 (Google) for the two-tower + sampled-softmax formulation with logQ correction.</div>
+
+<!-- 4 TRAINING -->
+<section class="slide">
+  <div class="kicker">How the Towers Are Trained</div>
+  <h2>Softmax over 10⁹ items is impossible — so you sample, then correct.</h2>
+  <div class="cols">
+    <div class="col card"><h3>In-batch negatives</h3><p>Other items in the batch are the negatives — free, since their embeddings are already computed. The catch: popular items appear (as negatives) far too often.</p></div>
+    <div class="col card"><h3>logQ correction</h3><p>Fix the popularity skew: subtract <b>log Q(item)</b> (its sampling probability) from each logit. Skipping this silently punishes popular items. <em>This detail is the senior tell.</em></p></div>
+    <div class="col card"><h3>Hard negatives</h3><p>Mine near-misses from the ANN index itself — items the model <em>almost</em> retrieves. Sharpens the decision boundary; overdo it and training destabilizes.</p></div>
+  </div>
+  <p class="sub">Loss family: <span class="nd" data-key="sampled-softmax">sampled softmax</span> / InfoNCE-style contrastive — the same mathematics as CLIP.</p>
+</section>
+<div class="notes">Why logQ: in-batch sampling draws negatives ∝ item popularity, not uniformly, so the effective softmax is biased; subtracting log Q(i) from the logit makes the sampled softmax an unbiased estimate of the full softmax (importance correction). One more production wrinkle worth voicing: the training objective (clicked/watched) is a PROXY for the business goal — feedback loops (training on your own recommendations) and position bias contaminate labels; log-and-learn systems correct with propensity weighting.</div>
+
+<!-- 5 ANN -->
+<section class="slide">
+  <div class="kicker">Serving: Nearest Neighbors at Scale</div>
+  <h2>ANN search: trade a point of recall for 1000× the speed.</h2>
+  <table>
+    <tr><th>Index family</th><th>Idea</th><th>Trade-off</th></tr>
+    <tr><td><b>IVF-PQ</b> (FAISS)</td><td>cluster the space; quantize vectors to bytes</td><td>tiny memory, lossy distances</td></tr>
+    <tr><td><b>HNSW</b></td><td>navigable small-world graph, greedy descent</td><td>fast &amp; accurate, memory-hungry, hard to update</td></tr>
+    <tr><td><b class="rx">ScaNN</b> (Google)</td><td>anisotropic quantization — penalize error in the direction that changes dot-product <em>rankings</em></td><td>the one to name at Google</td></tr>
+  </table>
+  <p class="sub">Measure with <b>recall@k vs QPS</b> curves. Exact brute force is actually fine to ~1M vectors on a <span class="gpu">GPU</span> — know when you don't need an index at all.</p>
+</section>
+<div class="notes">ScaNN's insight (Guo et al., ICML 2020): standard quantization minimizes ‖v−ṽ‖² uniformly, but retrieval only cares about errors parallel to likely query directions — anisotropic loss weights the components that flip rankings. SOAR (2023) is the recent upgrade. The "1M vectors → brute force on GPU" point is a great judgment signal: 1M × 128-d dot products ≈ 128 MFLOPs ≈ microseconds on an H100 — don't build infrastructure you don't need.</div>
+
+<!-- 6 FRESHNESS -->
+<section class="slide">
+  <div class="kicker">The Operational Slide (The L5 Gap)</div>
+  <h2>Indexes go stale. Towers drift. Versions must match.</h2>
+  <ul class="clean">
+    <li><b>Batch rebuild:</b> re-embed the corpus + rebuild the <span class="nd" data-key="ann">ANN index</span> every N hours — simple, but new items are invisible until the next build</li>
+    <li><b>Fresh buffer hybrid:</b> big static index + small brute-force buffer of new items, <b>merged at query time</b> — the standard answer for "how do new videos get recommended?"</li>
+    <li><b>Version skew:</b> the user tower and the index must come from the <em>same</em> model version — mixing embedding spaces silently breaks retrieval. Deploy towers + index atomically</li>
+    <li><b>Embedding drift:</b> retrain → whole corpus must be re-embedded; incremental training mitigates but complicates</li>
+  </ul>
+</section>
+<div class="notes">This slide is verbatim the feedback gap: "real-time index updates vs batch retraining." The fresh-buffer answer: new items' embeddings computed on upload by the item tower, held in an unindexed brute-force pool (cheap while small), merged into candidates at query time, folded into the main index at next rebuild. Version skew is the production bug interviewers love: user embedding from model v7 against an index built with v6 = garbage retrieval with no errors thrown. Say "atomic swap of tower + index" and you sound like you've been paged for it.</div>
+
+<!-- 7 RANKING -->
+<section class="slide">
+  <div class="kicker">After Retrieval: The Ranking Stage</div>
+  <h2>Ranking is where the cross features live — and where the memory monsters sleep.</h2>
+  <div class="cols">
+    <div class="col card"><h3>Why a second model</h3><p>Two-tower can't express user×item interactions ("this user × this topic at night"). The ranker sees the full joint feature set — <span class="nd" data-key="wide-deep">Wide &amp; Deep</span> (Google 2016), DCN, DLRM — on only ~10² candidates, so it can afford to be heavy.</p></div>
+    <div class="col card"><h3>The hardware tie-in</h3><p>Production rankers hold <b>terabyte-scale embedding tables</b> (one row per user/item/feature value) — sharded across devices as <em>model parallelism for memory, not compute</em>, with all-to-all lookups. Your parallelism decks apply directly here.</p></div>
+  </div>
+  <p class="sub">Judge it with <span class="nd" data-key="recsys-metrics">NDCG/AUC offline — but trust only the online A/B</span>: position bias and feedback loops routinely fake offline wins.</p>
+</section>
+<div class="notes">The embedding-table point bridges this deck to the systems decks: DLRM-style models are memory-bandwidth-bound on lookups (sparse, random access — the GPU's weak spot from deck 1!) which is why Meta/Google built custom sharding and why recommendation inference often lives on CPUs + custom accelerators. Full-circle moment worth making out loud in an interview.</div>
+
+<!-- 8 NUMBERS -->
+<section class="slide">
+  <div class="kicker">Back-of-the-Envelope Kit</div>
+  <h2>Numbers that make retrieval answers concrete.</h2>
+  <table>
+    <tr><th>Quantity</th><th>Value</th><th>Why it matters</th></tr>
+    <tr><td>1B items × 128-d FP32 embeddings</td><td class="num">512 GB</td><td>why indexes quantize (PQ → ~16 GB)</td></tr>
+    <tr><td>Retrieval latency budget</td><td class="num">~10–20 ms</td><td>of a ~200 ms end-to-end funnel</td></tr>
+    <tr><td>Brute-force feasibility</td><td class="num">~1M vectors</td><td>below this, skip the ANN index entirely</td></tr>
+    <tr><td>Candidates per stage</td><td class="num">10⁹ → 10³ → 10² → 10</td><td>the funnel, quantified</td></tr>
+    <tr><td>Offline metric / online metric</td><td class="num">recall@k · NDCG / CTR via A/B</td><td>name both, trust the second</td></tr>
+  </table>
+</section>
+<div class="notes">Worked estimate to rehearse: "Could we brute-force YouTube?" 10⁹ items × 128 dims × 4 bytes = 512 GB of embeddings and 128 GFLOPs per query — per QUERY, at ~10⁵ QPS. No. That 30-second calculation justifies the entire ANN industry and shows the estimation habit Google screens for.</div>
+
+<!-- 9 CLOSE -->
+<section class="slide">
+  <div class="kicker">The One-Breath Answer</div>
+  <h1 style="font-size:2.15rem">"Retrieval at scale is a funnel: a two-tower model maps users and items into one embedding space trained with sampled softmax plus logQ correction, item embeddings live in an ANN index like ScaNN — kept fresh with batch rebuilds plus a brute-force buffer, versioned atomically with the tower — and the survivors go to a heavy cross-feature ranker, validated offline by recall@k and NDCG but trusted only after an online A/B."</h1>
+  <p class="sub">Expand on demand: <span class="nd" data-key="two-tower">two-tower</span> · <span class="nd" data-key="sampled-softmax">logQ</span> · <span class="nd" data-key="ann">ScaNN internals</span> · <span class="nd" data-key="funnel">funnel economics</span> · <span class="nd" data-key="wide-deep">Wide &amp; Deep</span> · <span class="nd" data-key="recsys-metrics">metrics</span></p>
+</section>
+<div class="notes">This breath directly covers all three L5 feedback gaps: training detail (sampled softmax + logQ), index maintenance (rebuild + buffer + version skew), and the funnel framing. The vectorization reflex is a coding-round habit, not a slide — but remember it: time-decay weights = np.exp(-lam*(now-timestamps)), written vectorized the FIRST time.</div>
+
+
+<!-- INTERACTIVE (v2) -->
+<section class="slide">
+  <div class="kicker">🎛 Interactive · Brute Force or Index?</div>
+  <h2>The 30-second math that decides if you need ANN at all.</h2>
+  <div class="aiml-widget" data-calc="bruteforce">
+    <div class="sl-row"><label>corpus size (log)</label><input type="range" data-k="logN" min="4" max="10" step="0.1" value="9"><span class="sl-val" data-k="logN"></span></div><div class="sl-row"><label>embedding dims</label><input type="range" data-k="d" min="32" max="1024" step="32" value="128"><span class="sl-val" data-k="d"></span></div><div class="sl-row"><label>queries/sec (log)</label><input type="range" data-k="logQ" min="0" max="5" step="0.1" value="3"><span class="sl-val" data-k="logQ"></span></div>
+    
+    <div class="wout"></div>
+  </div>
+  <p class="sub">1M vectors? Brute force on a GPU and skip the infrastructure. 1B at 1k QPS? That's the ANN industry's reason to exist. Slide between the regimes.</p>
+</section>
+<div class="notes">Rehearsal: set 10⁹ items, 128 dims, 10⁵ QPS — the YouTube case: ~256 GFLOPs/query, tens of PFLOP/s fleet-wide, 512 GB of raw embeddings. No. Then 10⁶ items at 100 QPS: 0.26 GFLOPs/query — a single GPU shrugs.</div>
+
+<div id="tip"></div>
+<div class="hud"><span id="pg"></span></div>
+<div class="hint">← → navigate · N notes · F fullscreen · hover amber = name-drop cards</div>
+
+<script src="namedrops.js"></script>
+<script src="sitenav.js"></script>
+<script src="calmaudio.js"></script>
+<script>
+const slides=[...document.querySelectorAll('.slide')], notes=[...document.querySelectorAll('.notes')];
+let i=0;
+function show(n){ i=(n+slides.length)%slides.length;
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  notes.forEach((s,k)=>s.classList.toggle('active-note',k===i));
+  document.getElementById('pg').textContent=(i+1)+' / '+slides.length; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')show(i+1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')show(i-1);
+  else if(e.key.toLowerCase()==='n')document.body.classList.toggle('show-notes');
+  else if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.();
+});
+show(0);
+
+const tip=document.getElementById('tip');
+document.querySelectorAll('.nd').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    const d=NAMEDROPS[el.dataset.key]; if(!d) return;
+    tip.innerHTML=`<span class="t-name">${d.name}</span><span class="t-cat">${d.category}</span>
+      <div class="t-row"><b>What:</b> ${d.what}</div>
+      <div class="t-row"><b>Why it matters:</b> ${d.why}</div>
+      <div class="t-row"><b>Alternatives:</b> ${d.alt}</div>`;
+    tip.style.display='block';
+    const r=el.getBoundingClientRect();
+    let x=r.left, y=r.bottom+10;
+    tip.style.left='0px'; tip.style.top='0px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    if(x+tw>innerWidth-20) x=innerWidth-tw-20;
+    if(y+th>innerHeight-20) y=r.top-th-10;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  el.addEventListener('mouseleave',()=>{ tip.style.display='none'; });
+});
+</script>
+<script src="interactive.js"></script>
+</body>
+</html>

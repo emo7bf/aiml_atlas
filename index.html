@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AIML Interview Basics</title>
+<meta name="description" content="Interactive slide decks for AI/ML engineering interview prep — hardware to serving, fundamentals to RAG, plus a full DP learning track.">
+<style>
+  :root { --bg:#fbfbf6; --panel:#fff; --edge:#d9d7c8; --ink:#20242e; --dim:#6b7078;
+    --accent:#c2410c; --gold:#c89b4e; --mono:"Cascadia Code","Consolas",monospace; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); font-family:Georgia,serif; padding:3.5rem 5vw 4rem;
+         background-image:linear-gradient(#e8e6d890 1px,transparent 1px),linear-gradient(90deg,#e8e6d890 1px,transparent 1px);
+         background-size:4vmin 4vmin; min-height:100vh; }
+  .wrap { max-width:1100px; margin:0 auto; }
+  h1 { font-size:2.8rem; line-height:1.15; margin-bottom:.4rem; }
+  .sub { color:var(--dim); font-family:"Segoe UI",system-ui,sans-serif; font-size:1.1rem; line-height:1.6; max-width:76ch; margin:.4rem 0 2rem; }
+  .sub a { color:var(--accent); text-decoration:none; } .sub a:hover { text-decoration:underline; }
+  h2 { font-size:1.2rem; margin:1.8rem 0 .7rem; color:var(--accent); font-family:"Segoe UI",sans-serif; text-transform:uppercase; letter-spacing:.15em; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:.9rem; }
+  .card { background:var(--panel); border:1px solid var(--edge); border-radius:10px; padding:.8rem 1rem;
+          box-shadow:2px 3px 0 #0001; text-decoration:none; color:var(--ink); display:block;
+          transition:transform .15s, border-color .15s; }
+  .card:hover { transform:translateY(-2px); border-color:var(--accent); }
+  .card .ic { font-size:1.4rem; margin-right:.4rem; }
+  .card .t { font-weight:700; font-size:1.02rem; }
+  .card .d { color:var(--dim); font-size:.84rem; font-family:"Segoe UI",sans-serif; margin-top:.25rem; line-height:1.4; }
+  .foot { color:var(--dim); font-family:"Segoe UI",sans-serif; font-size:.85rem; margin-top:2.5rem; border-top:1px solid var(--edge); padding-top:1rem; }
+  .foot a { color:var(--accent); text-decoration:none; }
+  .star { position:absolute; pointer-events:none; animation: twinkle 3s ease-in-out infinite; }
+  .star path { fill:var(--gold); opacity:.5; }
+  @keyframes twinkle { 50% { opacity:.9; transform:scale(1.12); } }
+</style>
+</head>
+<body>
+<div class="wrap" style="position:relative">
+  <span class="star" style="left:-2rem;top:-1rem;width:38px;height:38px;animation-delay:-.3s"><svg viewBox="-50 -50 100 100"><path d="M0,-46 L6.5,-6.5 L46,0 L6.5,6.5 L0,46 L-6.5,6.5 L-46,0 L-6.5,-6.5 Z"/></svg></span>
+  <span class="star" style="right:8%;top:1rem;width:28px;height:28px;animation-delay:-1.4s"><svg viewBox="-50 -50 100 100"><path d="M0,-46 L6.5,-6.5 L46,0 L6.5,6.5 L0,46 L-6.5,6.5 L-46,0 L-6.5,-6.5 Z"/></svg></span>
+  <span class="star" style="right:-1rem;top:7rem;width:20px;height:20px;animation-delay:-2.1s"><svg viewBox="-50 -50 100 100"><path d="M0,-46 L6.5,-6.5 L46,0 L6.5,6.5 L0,46 L-6.5,6.5 L-46,0 L-6.5,-6.5 Z"/></svg></span>
+
+  <h1>AIML Interview Basics</h1>
+  <p class="sub">Interactive slide decks + narrated walkthroughs for AI/ML engineering interview prep — hardware to serving, fundamentals to RAG, plus a full dynamic-programming track. Every deck is one self-contained HTML file. <a href="https://github.com/emo7bf/aiml-interview-basics">source on GitHub ↗</a></p>
+
+  <h2>🧠 ML Systems</h2>
+  <div class="grid">
+    <a class="card" href="gpu_hardware_slides.html"><span class="ic">🖥️</span><span class="t">GPU Hardware</span><div class="d">SIMT · HBM · tensor cores · roofline</div></a>
+    <a class="card" href="pipeline_parallel_slides.html"><span class="ic">🚇</span><span class="t">Pipeline Parallelism</span><div class="d">GPipe · bubble math · 1F1B</div></a>
+    <a class="card" href="tensor_parallel_slides.html"><span class="ic">🧩</span><span class="t">Tensor Parallelism & Collectives</span><div class="d">Megatron splits · all-reduce · α-β model</div></a>
+    <a class="card" href="transformer_internals_slides.html"><span class="ic">🔮</span><span class="t">Transformer Internals</span><div class="d">attention shapes · RoPE · GQA · MoE</div></a>
+    <a class="card" href="quantization_slides.html"><span class="ic">🗜️</span><span class="t">Quantization & Compression</span><div class="d">FP8 · SmoothQuant · GPTQ/AWQ · QLoRA</div></a>
+    <a class="card" href="inference_serving_slides.html"><span class="ic">⚡</span><span class="t">Inference Serving</span><div class="d">prefill/decode · batching · speculative</div></a>
+  </div>
+
+  <h2>📊 Applied ML</h2>
+  <div class="grid">
+    <a class="card" href="recsys_retrieval_slides.html"><span class="ic">🎯</span><span class="t">Embeddings, Retrieval & RecSys</span><div class="d">two-tower · ScaNN · logQ · the funnel</div></a>
+    <a class="card" href="rag_vector_search_slides.html"><span class="ic">🔎</span><span class="t">RAG & Vector Search</span><div class="d">hybrid · HNSW/ScaNN · ColBERT · CRAG</div></a>
+    <a class="card" href="ml_fundamentals_slides.html"><span class="ic">📐</span><span class="t">Classical ML Fundamentals</span><div class="d">bias-variance · trees · SVM · CNN/RNN</div></a>
+    <a class="card" href="ml_infra_slides.html"><span class="ic">🧰</span><span class="t">Frameworks & ML Infra</span><div class="d">PyTorch/JAX/TF · Ray · Kubeflow · two Tritons</div></a>
+  </div>
+
+  <h2>👩‍💻 Coding Track · DP + Algorithms</h2>
+  <div class="grid">
+    <a class="card" href="dp_beginners_1_slides.html"><span class="ic">🪜</span><span class="t">DP for Beginners · Part 1</span><div class="d">the 5-step recipe · 1-D DP · fib → robber</div></a>
+    <a class="card" href="dp_beginners_2_slides.html"><span class="ic">🗺️</span><span class="t">DP for Beginners · Part 2</span><div class="d">2-D DP · grids · knapsack · LCS</div></a>
+    <a class="card" href="dp_garden_slides.html"><span class="ic">🌿</span><span class="t">The DP Garden · Guided Reps</span><div class="d">Q→A ladder · pond → boss fight · typed code</div></a>
+    <a class="card" href="dp_conversation_slides.html"><span class="ic">🕊️</span><span class="t">Still Waters · DP Conversation</span><div class="d">guided dialogue · voice & music · naming</div></a>
+    <a class="card" href="nightsky_slides.html"><span class="ic">✦</span><span class="t">Night Sky · Trees, Graphs & Lists</span><div class="d">coached interactives · tap the BFS · flip pointers</div></a>
+    <a class="card" href="algo_crib.html"><span class="ic">🧮</span><span class="t">Algorithm Crib Sheet</span><div class="d">sorting · heaps · Dijkstra/A* · NP-complete</div></a>
+    <a class="card" href="fashion_twotower_slides.html"><span class="ic">👗</span><span class="t">The logQ Boutique</span><div class="d">sampled softmax · logQ · contrastive · 3D animation</div></a>
+  </div>
+
+  <h2>📚 Reference</h2>
+  <div class="grid">
+    <a class="card" href="namedrops_browser.html"><span class="ic">📚</span><span class="t">Name-Drop Database</span><div class="d">every term, searchable, by category</div></a>
+    <a class="card" href="flashcards_fable.html"><span class="ic">🃏</span><span class="t">Fable Addendum Flashcards</span><div class="d">20 practitioner cards · IYKYK layer</div></a>
+    <a class="card" href="AI_ML_Equation_Flashcards.pdf"><span class="ic">📄</span><span class="t">157-card Flashcard PDF</span><div class="d">the full equation flashcard field guide</div></a>
+  </div>
+
+  <div class="foot">
+    Built over three weeks of interview prep. Everything is static HTML/JS/CSS — fork it, remix it, make it yours. <br>
+    Controls on any deck: <code>←</code>/<code>→</code> navigate · <code>N</code> notes · <code>F</code> fullscreen · hover amber terms for cards · 🎛 bottom-right for audio.
+  </div>
+</div>
+</body>
+</html>
